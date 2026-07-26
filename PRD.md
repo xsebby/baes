@@ -9,7 +9,7 @@
 
 ## 1. Vision
 
-A self-hosted, private music streaming platform for a large collection of **unreleased music and local files**. The library lives on a server the owner controls; it can be streamed from a phone, laptop, or any device, stays in sync automatically, and supports offline listening. Spotify is integrated as a *companion source*: playlists and saved music from Spotify are mirrored into the app so everything — unreleased files and Spotify listening — lives in one unified library view.
+A self-hosted, private music streaming platform for a large collection of **unreleased music and local files**. The library lives on a server the owner controls; it can be streamed from a phone, laptop, or any device, stays in sync automatically, and supports offline listening. Spotify is integrated as a _companion source_: playlists and saved music from Spotify are mirrored into the app so everything — unreleased files and Spotify listening — lives in one unified library view.
 
 **One-liner:** "My entire music world — unreleased files + Spotify playlists — in one app, streamable anywhere, synced everywhere."
 
@@ -18,6 +18,7 @@ A self-hosted, private music streaming platform for a large collection of **unre
 ## 2. Goals & Non-Goals
 
 ### Goals
+
 1. Ingest and index a large local-file collection (FLAC, WAV, MP3, M4A/AAC, OGG, AIFF), including messy/untagged unreleased tracks.
 2. Stream from any device with instant seek (HTTP range requests) and adaptive quality (on-the-fly transcode for cellular).
 3. Regular, automatic sync: library changes on the server appear on all clients; play state, queue position, playlists, likes, and play counts sync across devices.
@@ -27,6 +28,7 @@ A self-hosted, private music streaming platform for a large collection of **unre
 7. Single React Native (Expo) codebase for iOS + Android, with a web client sharing the same core package.
 
 ### Non-Goals (v1)
+
 - ❌ Streaming Spotify's actual audio through our own player (impossible: DRM; Spotify audio plays only via Spotify's own SDKs/app — see §8).
 - ❌ Ripping/extracting Spotify downloads (DRM-protected; not technically or legally feasible).
 - ❌ Public sharing/social features (Lumen's share pages, Replay) — deferred to v2.
@@ -37,10 +39,10 @@ A self-hosted, private music streaming platform for a large collection of **unre
 
 ## 3. Users
 
-| Persona | Description | Needs |
-|---|---|---|
-| **Owner (primary)** | Runs the server, owns the unreleased collection | Full admin: library roots, scans, invites, Spotify link, metadata editing |
-| **Invited listener (optional)** | Friend given an invite token | Stream + playlist, no admin, possibly no download rights |
+| Persona                         | Description                                     | Needs                                                                     |
+| ------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------- |
+| **Owner (primary)**             | Runs the server, owns the unreleased collection | Full admin: library roots, scans, invites, Spotify link, metadata editing |
+| **Invited listener (optional)** | Friend given an invite token                    | Stream + playlist, no admin, possibly no download rights                  |
 
 v1 can ship owner-only; the auth model should support invitees from day one (Lumen's invite-token model is the template).
 
@@ -87,18 +89,18 @@ baes/
 
 ### 4.2 Tech stack decisions
 
-| Layer | Choice | Rationale |
-|---|---|---|
-| Backend | **Node 22 + TypeScript + Fastify** | One language across the whole monorepo; shared types between server and RN app via `@baes/core`. (Lumen uses Go; we trade some raw perf for end-to-end type sharing. Streaming is I/O-bound and Node handles range-serving fine.) |
-| DB | **PostgreSQL 16 + Drizzle ORM** | Relational fits library data; full-text search via `pg_trgm`/`tsvector`; Drizzle gives typed queries + migrations |
-| Audio probing | `ffprobe`; tags via `music-metadata` (handles FLAC/ID3/MP4 atoms) | Battle-tested, pure-TS tag reader |
-| Transcoding | ffmpeg (spawned pool, LRU disk cache of transcoded segments) | Same approach as Lumen |
-| Mobile | **Expo SDK (dev-client, not Expo Go)** + `react-native-track-player` | Track player gives background audio, lock-screen controls, CarPlay/Android Auto later |
-| Offline store | `expo-file-system` + SQLite (`expo-sqlite`) mirror of library metadata | Full offline browsing, not just cached blobs |
-| Web player | HTMLAudioElement + MediaSession API | v1.5 |
-| Auth | Argon2id + HTTP-only cookie session (web) / opaque bearer token (mobile), invite tokens | Mirrors Lumen's model |
-| Networking | HTTPS via Caddy **or** Tailscale-only mode | Owner picks exposure level; Tailscale default for max privacy |
-| Push/sync signal | Server-Sent Events (SSE) channel per client; mobile falls back to poll-on-foreground + background fetch task | Simpler than WebSockets for one-way invalidation |
+| Layer            | Choice                                                                                                       | Rationale                                                                                                                                                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend          | **Node 22 + TypeScript + Fastify**                                                                           | One language across the whole monorepo; shared types between server and RN app via `@baes/core`. (Lumen uses Go; we trade some raw perf for end-to-end type sharing. Streaming is I/O-bound and Node handles range-serving fine.) |
+| DB               | **PostgreSQL 16 + Drizzle ORM**                                                                              | Relational fits library data; full-text search via `pg_trgm`/`tsvector`; Drizzle gives typed queries + migrations                                                                                                                 |
+| Audio probing    | `ffprobe`; tags via `music-metadata` (handles FLAC/ID3/MP4 atoms)                                            | Battle-tested, pure-TS tag reader                                                                                                                                                                                                 |
+| Transcoding      | ffmpeg (spawned pool, LRU disk cache of transcoded segments)                                                 | Same approach as Lumen                                                                                                                                                                                                            |
+| Mobile           | **Expo SDK (dev-client, not Expo Go)** + `react-native-track-player`                                         | Track player gives background audio, lock-screen controls, CarPlay/Android Auto later                                                                                                                                             |
+| Offline store    | `expo-file-system` + SQLite (`expo-sqlite`) mirror of library metadata                                       | Full offline browsing, not just cached blobs                                                                                                                                                                                      |
+| Web player       | HTMLAudioElement + MediaSession API                                                                          | v1.5                                                                                                                                                                                                                              |
+| Auth             | Argon2id + HTTP-only cookie session (web) / opaque bearer token (mobile), invite tokens                      | Mirrors Lumen's model                                                                                                                                                                                                             |
+| Networking       | HTTPS via Caddy **or** Tailscale-only mode                                                                   | Owner picks exposure level; Tailscale default for max privacy                                                                                                                                                                     |
+| Push/sync signal | Server-Sent Events (SSE) channel per client; mobile falls back to poll-on-foreground + background fetch task | Simpler than WebSockets for one-way invalidation                                                                                                                                                                                  |
 
 ---
 
@@ -109,7 +111,7 @@ baes/
 - **Multiple music roots** configured by the owner (e.g. `/music/unreleased`, `/music/rips`). Bind-mounted into the container at identical paths (Lumen pattern).
 - **Initial scan:** walk roots, ffprobe each file, extract tags + embedded art, compute:
   - `content_hash` — SHA-256 of file bytes (dedupe, change detection)
-  - `audio_fingerprint` — Chromaprint/AcoustID fingerprint (dedupe *across formats* and Spotify matching support)
+  - `audio_fingerprint` — Chromaprint/AcoustID fingerprint (dedupe _across formats_ and Spotify matching support)
   - duration, bitrate, sample rate, channels, codec
 - **Watch mode:** `chokidar` on roots → debounce → incremental scan. Manual "Rescan" button in admin.
 - **Untagged/unreleased handling** (critical — unreleased files are often `artist - title (v2 FINAL).mp3` with zero tags):
@@ -122,11 +124,11 @@ baes/
 
 - **Direct stream endpoint:** `GET /api/stream/:trackId` supporting `Range` headers → instant scrubbing, no full-file buffering.
 - **Quality ladder:**
-  | Profile | Codec | Target | Use |
-  |---|---|---|---|
-  | `original` | passthrough | source | Wi-Fi / lossless lovers |
-  | `high` | Opus 192k (or AAC 256k for iOS compat) | ~192kbps | default cellular |
-  | `low` | Opus 96k | ~96kbps | data saver |
+  | Profile    | Codec                                  | Target   | Use                     |
+  | ---------- | -------------------------------------- | -------- | ----------------------- |
+  | `original` | passthrough                            | source   | Wi-Fi / lossless lovers |
+  | `high`     | Opus 192k (or AAC 256k for iOS compat) | ~192kbps | default cellular        |
+  | `low`      | Opus 96k                               | ~96kbps  | data saver              |
   - Transcodes produced by ffmpeg on demand, cached on disk (LRU, configurable cap e.g. 20 GB).
   - Client policy: per-network-type quality setting (Wi-Fi / cellular / downloads each independently configurable).
 - **Signed stream URLs:** every stream/artwork URL carries a short-lived HMAC token (leak protection for unreleased material — a copied URL dies in minutes).
@@ -135,24 +137,24 @@ baes/
 
 ### 5.3 Sync engine
 
-The contract: *anything you do on one device shows up on the others without thinking about it.*
+The contract: _anything you do on one device shows up on the others without thinking about it._
 
 - **Library sync (server → client):** server maintains a monotonically increasing `change_seq` (per-row `updated_seq` columns). Clients store `last_seq` and pull deltas: `GET /api/sync/changes?since=<seq>` returns upserts/tombstones for tracks, albums, artists, playlists, likes. Mobile keeps a full SQLite mirror → instant cold-start browsing, full offline browsing.
 - **Sync triggers:** SSE push while foregrounded; OS background-fetch task (15-min-class cadence) otherwise; always on app foreground.
 - **Playback state sync ("continue where I left off"):** client heartbeats now-playing (track, position, queue snapshot-id) every ~20 s while playing; other devices can "resume from phone" (explicit pull, not forced handoff — v1 keeps this simple).
 - **Playlist edits offline:** queued mutations (add/remove/reorder) stored locally, replayed on reconnect. Conflict policy: last-writer-wins per playlist item; reorder conflicts resolved by server ordering with fractional indexes (e.g. LexoRank-style keys).
-- **Downloads sync:** "downloaded" is a per-device flag, but *download rules* sync — e.g. "keep playlist X offline on my phone" auto-downloads new tracks added to X.
+- **Downloads sync:** "downloaded" is a per-device flag, but _download rules_ sync — e.g. "keep playlist X offline on my phone" auto-downloads new tracks added to X.
 
 ### 5.4 Offline downloads (mobile)
 
 - Download individual tracks, albums, playlists at a chosen quality profile.
-- Smart storage: cap setting, LRU eviction of *non-pinned* cached tracks; pinned downloads never auto-evicted.
+- Smart storage: cap setting, LRU eviction of _non-pinned_ cached tracks; pinned downloads never auto-evicted.
 - Downloads encrypted at rest? **v1: no** (files land in app-sandboxed storage, already inaccessible to other apps on iOS/Android); revisit if invitees get download rights.
 - Fully offline session: browse mirror, play downloads, edit playlists (queued), record play events (queued).
 
 ### 5.5 Spotify integration
 
-**Hard constraint (be honest with ourselves):** Spotify audio cannot be streamed by third-party players and downloaded Spotify content is DRM-locked. What the Web API *does* allow: reading playlists, liked songs, recently played, top items; and the **iOS/Android App Remote SDKs** allow controlling playback *in the installed Spotify app* (Premium).
+**Hard constraint (be honest with ourselves):** Spotify audio cannot be streamed by third-party players and downloaded Spotify content is DRM-locked. What the Web API _does_ allow: reading playlists, liked songs, recently played, top items; and the **iOS/Android App Remote SDKs** allow controlling playback _in the installed Spotify app_ (Premium).
 
 So the integration is three capabilities:
 
@@ -184,17 +186,17 @@ Unreleased music leaking is the nightmare scenario. Treat the server as hostile-
 
 ### 5.7 Client UX (React Native) — screen inventory
 
-| Screen | Contents |
-|---|---|
-| **Home** | Recently added, recently played, pinned playlists, "continue listening" |
-| **Library** | Tabs: Tracks / Albums / Artists / Playlists; sort + filter (source: local/Spotify); A-Z fast scroll |
-| **Search** | Unified full-text (local + mirrored Spotify), sectioned results |
-| **Album / Artist / Playlist detail** | Art, track list, download toggle, source badges (local file / Spotify / matched) |
-| **Now Playing** | Art, scrubber, queue sheet, quality indicator, cast/handoff affordance |
-| **Downloads** | Managed storage view, per-item pin/evict |
-| **Needs Review** (owner) | Untagged-import inbox, Spotify match confirmations |
-| **Admin** (owner) | Library roots, scan status/trigger, invites, users, Spotify link, transcode cache stats |
-| **Settings** | Quality per network, download rules, account, server URL, theme |
+| Screen                               | Contents                                                                                            |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| **Home**                             | Recently added, recently played, pinned playlists, "continue listening"                             |
+| **Library**                          | Tabs: Tracks / Albums / Artists / Playlists; sort + filter (source: local/Spotify); A-Z fast scroll |
+| **Search**                           | Unified full-text (local + mirrored Spotify), sectioned results                                     |
+| **Album / Artist / Playlist detail** | Art, track list, download toggle, source badges (local file / Spotify / matched)                    |
+| **Now Playing**                      | Art, scrubber, queue sheet, quality indicator, cast/handoff affordance                              |
+| **Downloads**                        | Managed storage view, per-item pin/evict                                                            |
+| **Needs Review** (owner)             | Untagged-import inbox, Spotify match confirmations                                                  |
+| **Admin** (owner)                    | Library roots, scan status/trigger, invites, users, Spotify link, transcode cache stats             |
+| **Settings**                         | Quality per network, download rules, account, server URL, theme                                     |
 
 Design language: dark-first, edge-to-edge art, big type. (Detailed design spec is a separate doc.)
 
@@ -254,15 +256,15 @@ POST   /api/spotify/matches/:id/confirm|reject
 
 ## 8. Constraints & Risks
 
-| Risk | Impact | Mitigation |
-|---|---|---|
-| Spotify audio can't be played in-app | Users may expect one seamless player | Set expectation in UI ("via Spotify" badge); maximize local matching so most playlist tracks play natively |
-| Spotify App Remote requires Premium + installed app | Handoff broken for free accounts | Deep-link fallback always works |
-| Unreleased music leak | Catastrophic | Tailscale-default, signed URLs, invite-only, audit log, no public share in v1 |
-| iOS background-sync limits | Stale library on phone | SQLite mirror makes staleness cosmetic; sync on foreground is instant delta |
-| Huge messy libraries (10k+ untagged files) | Scan quality poor, review inbox overwhelming | Heuristics + bulk edit tooling; fingerprint dedupe collapses duplicates first |
-| ffmpeg transcode CPU on small servers | Playback stalls | Disk cache; pre-transcode-on-download; `original` profile bypasses ffmpeg |
-| Expo + track-player native module friction | Build pain | Use Expo dev-client/EAS from day 1 (not Expo Go) |
+| Risk                                                | Impact                                       | Mitigation                                                                                                 |
+| --------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Spotify audio can't be played in-app                | Users may expect one seamless player         | Set expectation in UI ("via Spotify" badge); maximize local matching so most playlist tracks play natively |
+| Spotify App Remote requires Premium + installed app | Handoff broken for free accounts             | Deep-link fallback always works                                                                            |
+| Unreleased music leak                               | Catastrophic                                 | Tailscale-default, signed URLs, invite-only, audit log, no public share in v1                              |
+| iOS background-sync limits                          | Stale library on phone                       | SQLite mirror makes staleness cosmetic; sync on foreground is instant delta                                |
+| Huge messy libraries (10k+ untagged files)          | Scan quality poor, review inbox overwhelming | Heuristics + bulk edit tooling; fingerprint dedupe collapses duplicates first                              |
+| ffmpeg transcode CPU on small servers               | Playback stalls                              | Disk cache; pre-transcode-on-download; `original` profile bypasses ffmpeg                                  |
+| Expo + track-player native module friction          | Build pain                                   | Use Expo dev-client/EAS from day 1 (not Expo Go)                                                           |
 
 ---
 
@@ -275,7 +277,7 @@ Monorepo scaffold, Docker Compose (Postgres + server), CI, Drizzle schema v1, au
 Scanner + watcher, tag extraction, art pipeline, fingerprinting, dedupe, needs-review flow, search, range streaming + signed URLs.
 
 **M2 — Mobile MVP**
-Expo app: auth, library browse (SQLite mirror + delta sync), search, now-playing with react-native-track-player, queue, play events. *At the end of M2 you can stream your library from your phone.*
+Expo app: auth, library browse (SQLite mirror + delta sync), search, now-playing with react-native-track-player, queue, play events. _At the end of M2 you can stream your library from your phone._
 
 **M3 — Transcoding + offline**
 Quality ladder, transcode cache, downloads + pinning + storage manager, offline session support, download rules.
@@ -293,66 +295,72 @@ Playback-state sync/resume, playlist offline mutations + conflict handling, admi
 Convention: **Fable** = frontier reasoning (architecture, concurrency, gnarly integration), **Opus** = heavy implementation with judgment, **Sonnet** = well-scoped implementation, CRUD, UI screens, tests-from-spec. Tasks marked Fable+Opus mean: Fable designs/reviews, Opus implements.
 
 ### M0 — Foundation
-| Task | Model | Notes |
-|---|---|---|
-| Monorepo scaffold (pnpm workspaces, TS config, Expo app init, Fastify init) | Sonnet | Mechanical, well-trodden |
-| Docker Compose + Caddy/Tailscale deployment modes | Sonnet | |
-| Drizzle schema v1 + migration setup | Opus | Schema decisions ripple everywhere; worth judgment |
-| Auth system (Argon2id, sessions, invites, token revocation) | **Fable + Opus** | Security-critical; Fable reviews design + implementation |
-| CI (lint, typecheck, test, EAS build hooks) | Sonnet | |
+
+| Task                                                                        | Model            | Notes                                                    |
+| --------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------- |
+| Monorepo scaffold (pnpm workspaces, TS config, Expo app init, Fastify init) | Sonnet           | Mechanical, well-trodden                                 |
+| Docker Compose + Caddy/Tailscale deployment modes                           | Sonnet           |                                                          |
+| Drizzle schema v1 + migration setup                                         | Opus             | Schema decisions ripple everywhere; worth judgment       |
+| Auth system (Argon2id, sessions, invites, token revocation)                 | **Fable + Opus** | Security-critical; Fable reviews design + implementation |
+| CI (lint, typecheck, test, EAS build hooks)                                 | Sonnet           |                                                          |
 
 ### M1 — Library core
-| Task | Model | Notes |
-|---|---|---|
-| Scanner architecture (walker, ffprobe pool, incremental diffing vs content_hash, watcher debounce) | **Fable** design → **Opus** implement | Correctness under concurrent FS churn is genuinely hard |
-| Tag extraction + art pipeline | Sonnet | Library-driven |
-| Chromaprint fingerprinting + duplicate/version clustering | **Fable + Opus** | Cross-format dedupe logic + clustering thresholds |
-| Filename-heuristic metadata inference for untagged files | Opus | Fuzzy, needs judgment; testable |
-| Needs-review inbox API + bulk edit endpoints | Sonnet | CRUD |
-| Full-text search (tsvector/trgm indexes, ranking) | Opus | |
-| Range-request streaming endpoint + signed URL scheme (HMAC, expiry, revocation) | **Fable + Opus** | Streaming edge cases (range math, client aborts) + security |
+
+| Task                                                                                               | Model                                 | Notes                                                       |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------- |
+| Scanner architecture (walker, ffprobe pool, incremental diffing vs content_hash, watcher debounce) | **Fable** design → **Opus** implement | Correctness under concurrent FS churn is genuinely hard     |
+| Tag extraction + art pipeline                                                                      | Sonnet                                | Library-driven                                              |
+| Chromaprint fingerprinting + duplicate/version clustering                                          | **Fable + Opus**                      | Cross-format dedupe logic + clustering thresholds           |
+| Filename-heuristic metadata inference for untagged files                                           | Opus                                  | Fuzzy, needs judgment; testable                             |
+| Needs-review inbox API + bulk edit endpoints                                                       | Sonnet                                | CRUD                                                        |
+| Full-text search (tsvector/trgm indexes, ranking)                                                  | Opus                                  |                                                             |
+| Range-request streaming endpoint + signed URL scheme (HMAC, expiry, revocation)                    | **Fable + Opus**                      | Streaming edge cases (range math, client aborts) + security |
 
 ### M2 — Mobile MVP
-| Task | Model | Notes |
-|---|---|---|
-| Delta-sync protocol design (`updated_seq`, tombstones, pagination, SSE invalidation) | **Fable** | The single hardest design in the project; get it right once |
-| Sync engine client implementation (SQLite mirror, resumable delta pull, migration of mirror schema) | **Opus** (Fable review) | |
-| App navigation shell + theming + design system components | Sonnet | |
-| Library screens (tracks/albums/artists/playlists, A-Z scroll, sort/filter) | Sonnet | |
-| Search screen | Sonnet | |
-| react-native-track-player integration (background audio, lock screen, queue semantics, gapless) | **Fable + Opus** | Native-module land; platform quirks galore |
-| Now Playing + queue UI | Sonnet | |
-| Play-event batching + upload | Sonnet | |
-| Auth screens + server-URL onboarding | Sonnet | |
+
+| Task                                                                                                | Model                   | Notes                                                       |
+| --------------------------------------------------------------------------------------------------- | ----------------------- | ----------------------------------------------------------- |
+| Delta-sync protocol design (`updated_seq`, tombstones, pagination, SSE invalidation)                | **Fable**               | The single hardest design in the project; get it right once |
+| Sync engine client implementation (SQLite mirror, resumable delta pull, migration of mirror schema) | **Opus** (Fable review) |                                                             |
+| App navigation shell + theming + design system components                                           | Sonnet                  |                                                             |
+| Library screens (tracks/albums/artists/playlists, A-Z scroll, sort/filter)                          | Sonnet                  |                                                             |
+| Search screen                                                                                       | Sonnet                  |                                                             |
+| react-native-track-player integration (background audio, lock screen, queue semantics, gapless)     | **Fable + Opus**        | Native-module land; platform quirks galore                  |
+| Now Playing + queue UI                                                                              | Sonnet                  |                                                             |
+| Play-event batching + upload                                                                        | Sonnet                  |                                                             |
+| Auth screens + server-URL onboarding                                                                | Sonnet                  |                                                             |
 
 ### M3 — Transcoding + offline
-| Task | Model | Notes |
-|---|---|---|
-| ffmpeg transcode pool + LRU disk cache (concurrency caps, partial-request handling mid-transcode) | **Fable + Opus** | Streaming *while* transcoding is the hard part |
-| Quality-policy client logic (network detection, per-context profiles) | Sonnet | |
-| Download manager (queue, resume, integrity check, pin/evict, storage caps) | **Opus** | Long-running background transfers on iOS need care |
-| Offline mode (mirror-only browsing, queued mutations, queued play events) | **Opus** (Fable review of conflict policy) | |
-| Downloads UI + storage manager screen | Sonnet | |
+
+| Task                                                                                              | Model                                      | Notes                                              |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------- |
+| ffmpeg transcode pool + LRU disk cache (concurrency caps, partial-request handling mid-transcode) | **Fable + Opus**                           | Streaming _while_ transcoding is the hard part     |
+| Quality-policy client logic (network detection, per-context profiles)                             | Sonnet                                     |                                                    |
+| Download manager (queue, resume, integrity check, pin/evict, storage caps)                        | **Opus**                                   | Long-running background transfers on iOS need care |
+| Offline mode (mirror-only browsing, queued mutations, queued play events)                         | **Opus** (Fable review of conflict policy) |                                                    |
+| Downloads UI + storage manager screen                                                             | Sonnet                                     |                                                    |
 
 ### M4 — Spotify
-| Task | Model | Notes |
-|---|---|---|
-| OAuth PKCE flow + encrypted refresh-token storage + sync worker scheduling | Opus | |
-| Playlist/likes/history mirror (pagination, rate limits, incremental diffing via snapshot_id) | Opus | |
-| Track matcher (ISRC → exact → fuzzy trigram tiers, confidence scoring) | **Fable + Opus** | Matching quality makes or breaks the feature |
-| Match review UI | Sonnet | |
-| Mixed-source playlists (data model already supports; rendering + play routing) | Sonnet | |
-| App Remote SDK handoff (iOS + Android native modules, session mgmt, "playing via Spotify" state) | **Fable + Opus** | Two native SDKs, lifecycle pain |
+
+| Task                                                                                             | Model            | Notes                                        |
+| ------------------------------------------------------------------------------------------------ | ---------------- | -------------------------------------------- |
+| OAuth PKCE flow + encrypted refresh-token storage + sync worker scheduling                       | Opus             |                                              |
+| Playlist/likes/history mirror (pagination, rate limits, incremental diffing via snapshot_id)     | Opus             |                                              |
+| Track matcher (ISRC → exact → fuzzy trigram tiers, confidence scoring)                           | **Fable + Opus** | Matching quality makes or breaks the feature |
+| Match review UI                                                                                  | Sonnet           |                                              |
+| Mixed-source playlists (data model already supports; rendering + play routing)                   | Sonnet           |                                              |
+| App Remote SDK handoff (iOS + Android native modules, session mgmt, "playing via Spotify" state) | **Fable + Opus** | Two native SDKs, lifecycle pain              |
 
 ### M5 — Polish + hardening
-| Task | Model | Notes |
-|---|---|---|
-| Playback-state sync + "resume from other device" | Opus | |
-| Playlist conflict resolution (fractional-index reorder, LWW semantics) | **Fable** design → Opus | |
-| Admin screens (scan status, invites, users, cache stats) | Sonnet | |
-| Web client (reuse @baes/core; HTMLAudio player) | Sonnet | |
-| Security pass (rate limits, audit log, headers, dependency audit) | **Fable** | Adversarial review |
-| Backup/restore scripts + deployment docs | Sonnet | |
+
+| Task                                                                   | Model                   | Notes              |
+| ---------------------------------------------------------------------- | ----------------------- | ------------------ |
+| Playback-state sync + "resume from other device"                       | Opus                    |                    |
+| Playlist conflict resolution (fractional-index reorder, LWW semantics) | **Fable** design → Opus |                    |
+| Admin screens (scan status, invites, users, cache stats)               | Sonnet                  |                    |
+| Web client (reuse @baes/core; HTMLAudio player)                        | Sonnet                  |                    |
+| Security pass (rate limits, audit log, headers, dependency audit)      | **Fable**               | Adversarial review |
+| Backup/restore scripts + deployment docs                               | Sonnet                  |                    |
 
 ---
 

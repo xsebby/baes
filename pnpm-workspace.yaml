@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+  - packages/*
+allowBuilds:
+  esbuild: true
+  '@node-rs/argon2': true
+  '@electric-sql/pglite': true

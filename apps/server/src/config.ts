@@ -11,6 +11,10 @@ const envSchema = z.object({
   SERVER_SECRET: z.string().min(16).default('dev-secret-change-me-in-prod'),
   SESSION_TTL_DAYS: z.coerce.number().default(30),
   INVITE_TTL_HOURS: z.coerce.number().default(72),
+  // Extracted cover art and other server-generated files live here.
+  DATA_DIR: z.string().default('.data'),
+  // Lifetime of signed stream/art URLs.
+  MEDIA_URL_TTL_SECONDS: z.coerce.number().default(900),
 });
 
 export type Config = z.infer<typeof envSchema>;

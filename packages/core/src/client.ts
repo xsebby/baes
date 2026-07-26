@@ -1,10 +1,17 @@
 import type {
+  AlbumDetail,
+  AlbumSummary,
   ApiErrorBody,
+  ArtistSummary,
   CreateInviteResponse,
   HealthResponse,
+  LibraryRoot,
   LoginRequest,
   LoginResponse,
+  PlayEventInput,
   RedeemInviteRequest,
+  ScanStatus,
+  Track,
   User,
 } from './types.js';
 
@@ -88,5 +95,65 @@ export class ApiClient {
 
   createInvite(role: 'listener' | 'owner' = 'listener'): Promise<CreateInviteResponse> {
     return this.request('POST', '/api/admin/invites', { role });
+  }
+
+  // ---- Library ----
+
+  listTracks(opts: { q?: string; limit?: number; offset?: number } = {}): Promise<{
+    tracks: Track[];
+  }> {
+    const params = new URLSearchParams();
+    if (opts.q) params.set('q', opts.q);
+    if (opts.limit) params.set('limit', String(opts.limit));
+    if (opts.offset) params.set('offset', String(opts.offset));
+    const qs = params.toString();
+    return this.request('GET', `/api/tracks${qs ? `?${qs}` : ''}`);
+  }
+
+  listAlbums(): Promise<{ albums: AlbumSummary[] }> {
+    return this.request('GET', '/api/albums');
+  }
+
+  getAlbum(id: string): Promise<AlbumDetail> {
+    return this.request('GET', `/api/albums/${id}`);
+  }
+
+  listArtists(): Promise<{ artists: ArtistSummary[] }> {
+    return this.request('GET', '/api/artists');
+  }
+
+  refreshStreamUrl(trackId: string): Promise<{ url: string; expiresAt: string }> {
+    return this.request('GET', `/api/tracks/${trackId}/stream-url`);
+  }
+
+  reportPlays(events: PlayEventInput[]): Promise<void> {
+    return this.request('POST', '/api/plays', { events });
+  }
+
+  /** Resolve a signed relative media path against the server base URL. */
+  mediaUrl(relative: string): string {
+    return `${this.baseUrl}${relative}`;
+  }
+
+  // ---- Admin: library roots + scanning ----
+
+  listRoots(): Promise<{ roots: LibraryRoot[] }> {
+    return this.request('GET', '/api/admin/roots');
+  }
+
+  addRoot(path: string): Promise<{ root: LibraryRoot }> {
+    return this.request('POST', '/api/admin/roots', { path });
+  }
+
+  removeRoot(id: string): Promise<void> {
+    return this.request('DELETE', `/api/admin/roots/${id}`);
+  }
+
+  startScan(): Promise<ScanStatus> {
+    return this.request('POST', '/api/admin/scan');
+  }
+
+  scanStatus(): Promise<ScanStatus> {
+    return this.request('GET', '/api/admin/scan/status');
   }
 }

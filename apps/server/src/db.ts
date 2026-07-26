@@ -1,3 +1,4 @@
+import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import * as schema from '@baes/db';
@@ -26,6 +27,8 @@ export async function createDb(databaseUrl: string): Promise<{
     const { PGlite } = await import('@electric-sql/pglite');
     const { drizzle } = await import('drizzle-orm/pglite');
     const { migrate } = await import('drizzle-orm/pglite/migrator');
+    // PGlite's node fs only mkdirs the leaf directory; create parents ourselves.
+    if (target !== 'memory') mkdirSync(target, { recursive: true });
     const client = target === 'memory' ? new PGlite() : new PGlite(target);
     const db = drizzle(client, { schema });
     await migrate(db, { migrationsFolder: migrationsFolder() });

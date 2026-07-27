@@ -75,6 +75,9 @@ export const libraryRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, co
   });
 
   app.get('/api/albums', { preHandler: app.requireAuth }, async () => {
+    // NOTE: counts use join+groupBy, not correlated subqueries — drizzle renders
+    // sql-template column refs unqualified, which silently mis-resolves inside
+    // a subquery ("id" binds to the inner table).
     const rows = await db
       .select({
         id: albums.id,
@@ -83,11 +86,13 @@ export const libraryRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, co
         artistId: albums.artistId,
         artistName: artists.name,
         hasArt: sql<boolean>`${albums.artPath} is not null`,
-        trackCount: sql<number>`(select count(*)::int from ${tracks} where ${tracks.albumId} = ${albums.id} and ${tracks.deletedAt} is null)`,
+        trackCount: sql<number>`count(${tracks.id})::int`,
       })
       .from(albums)
       .leftJoin(artists, eq(albums.artistId, artists.id))
+      .leftJoin(tracks, and(eq(tracks.albumId, albums.id), isNull(tracks.deletedAt)))
       .where(isNull(albums.deletedAt))
+      .groupBy(albums.id, albums.title, albums.year, albums.artistId, albums.artPath, artists.name)
       .orderBy(asc(artists.name), asc(albums.title));
     return {
       albums: rows
@@ -140,10 +145,12 @@ export const libraryRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, co
       .select({
         id: artists.id,
         name: artists.name,
-        trackCount: sql<number>`(select count(*)::int from ${tracks} where ${tracks.artistId} = ${artists.id} and ${tracks.deletedAt} is null)`,
+        trackCount: sql<number>`count(${tracks.id})::int`,
       })
       .from(artists)
+      .leftJoin(tracks, and(eq(tracks.artistId, artists.id), isNull(tracks.deletedAt)))
       .where(isNull(artists.deletedAt))
+      .groupBy(artists.id, artists.name, artists.sortName)
       .orderBy(asc(artists.sortName));
     return { artists: rows.filter((r) => r.trackCount > 0) };
   });

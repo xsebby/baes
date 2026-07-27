@@ -221,8 +221,8 @@ export class ApiClient {
     return this.request('DELETE', `/api/admin/roots/${id}`);
   }
 
-  startScan(): Promise<ScanStatus> {
-    return this.request('POST', '/api/admin/scan');
+  startScan(force = false): Promise<ScanStatus> {
+    return this.request('POST', '/api/admin/scan', { force });
   }
 
   scanStatus(): Promise<ScanStatus> {

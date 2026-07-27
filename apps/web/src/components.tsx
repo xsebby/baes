@@ -184,7 +184,7 @@ export function AddToPlaylistModal({ track, onClose }: { track: Track; onClose: 
 
 // ---- bottom player bar ----
 
-export function PlayerBar() {
+export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
   const { client } = useAuth();
   const {
     current,
@@ -261,6 +261,16 @@ export function PlayerBar() {
       </div>
 
       <div className="right">
+        {onExpand && (
+          <button
+            className="rowbtn"
+            style={{ visibility: 'visible', fontSize: 17 }}
+            title="Fullscreen"
+            onClick={onExpand}
+          >
+            ⛶
+          </button>
+        )}
         <span className="muted small">🔊</span>
         <input
           type="range"

@@ -492,3 +492,164 @@ input {
 .electron .topbar .logo {
   -webkit-app-region: no-drag;
 }
+
+/* ---- fullscreen player ---- */
+.fs {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #08080c;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fs-blobs {
+  position: absolute;
+  inset: -20%;
+  filter: blur(90px) saturate(1.4);
+  opacity: 0.55;
+}
+.fs-blob {
+  position: absolute;
+  width: 55vmax;
+  height: 55vmax;
+  border-radius: 50%;
+}
+.fs-blob-0 {
+  top: -10%;
+  left: -10%;
+  animation: drift0 26s ease-in-out infinite alternate;
+}
+.fs-blob-1 {
+  top: -5%;
+  right: -12%;
+  animation: drift1 31s ease-in-out infinite alternate;
+}
+.fs-blob-2 {
+  bottom: -12%;
+  left: -6%;
+  animation: drift2 23s ease-in-out infinite alternate;
+}
+.fs-blob-3 {
+  bottom: -8%;
+  right: -8%;
+  animation: drift3 35s ease-in-out infinite alternate;
+}
+@keyframes drift0 {
+  to {
+    transform: translate(18vw, 12vh) scale(1.2);
+  }
+}
+@keyframes drift1 {
+  to {
+    transform: translate(-14vw, 16vh) scale(0.9);
+  }
+}
+@keyframes drift2 {
+  to {
+    transform: translate(16vw, -10vh) scale(1.15);
+  }
+}
+@keyframes drift3 {
+  to {
+    transform: translate(-12vw, -14vh) scale(1.05);
+  }
+}
+.fs-close {
+  position: absolute;
+  top: 22px;
+  right: 26px;
+  z-index: 2;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 20px;
+  -webkit-app-region: no-drag;
+}
+.fs-close:hover {
+  color: #fff;
+}
+.fs-center {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: min(72vh, 80vw);
+  text-align: center;
+}
+.fs-art {
+  width: min(58vh, 76vw);
+  height: min(58vh, 76vw);
+  border-radius: 18px;
+  object-fit: cover;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
+  transition: transform 0.6s ease;
+}
+.fs-art.paused {
+  transform: scale(0.94);
+}
+.fs-art-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 90px;
+  color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+}
+.fs-title {
+  margin-top: 16px;
+  font-size: 26px;
+  font-weight: 800;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+}
+.fs-artist {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 15px;
+}
+.fs-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.fs-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+.fs-bar-fill {
+  height: 100%;
+  background: #fff;
+  border-radius: 2px;
+}
+.fs-controls {
+  display: flex;
+  align-items: center;
+  gap: 34px;
+  margin-top: 6px;
+}
+.fs-controls button {
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.85);
+}
+.fs-controls button:hover {
+  color: #fff;
+}
+.fs-controls .fs-play {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #fff;
+  color: #000;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

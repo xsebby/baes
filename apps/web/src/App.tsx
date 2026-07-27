@@ -3,6 +3,7 @@ import type { Track } from '@baes/core';
 import { AuthProvider, useAuth } from './state';
 import { PlayerProvider } from './player';
 import { AddToPlaylistModal, LikesProvider, PlayerBar } from './components';
+import { FullscreenPlayer } from './Fullscreen';
 import {
   AdminView,
   AlbumView,
@@ -22,6 +23,7 @@ function Main() {
   const [view, setView] = useState<View>({ type: 'library' });
   const [query, setQuery] = useState('');
   const [modalTrack, setModalTrack] = useState<Track | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
 
   const common = { navigate: setView, onAddToPlaylist: setModalTrack };
 
@@ -55,7 +57,8 @@ function Main() {
       {view.type === 'liked' && <LikedView {...common} />}
       {view.type === 'admin' && <AdminView navigate={setView} />}
 
-      <PlayerBar />
+      <PlayerBar onExpand={() => setFullscreen(true)} />
+      {fullscreen && <FullscreenPlayer onClose={() => setFullscreen(false)} />}
       {modalTrack && <AddToPlaylistModal track={modalTrack} onClose={() => setModalTrack(null)} />}
     </>
   );

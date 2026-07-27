@@ -61,9 +61,12 @@ export class LibraryScanner {
     return { ...this.status, errors: this.status.errors.slice(-20) };
   }
 
+  private force = false;
+
   /** Fire-and-forget; returns immediately if a scan is already running. */
-  start(): boolean {
+  start(force = false): boolean {
     if (this.status.running) return false;
+    this.force = force;
     this.status = {
       running: true,
       startedAt: new Date().toISOString(),
@@ -144,7 +147,7 @@ export class LibraryScanner {
       .where(and(eq(tracks.rootId, rootId), eq(tracks.relPath, relPath)))
       .limit(1);
 
-    if (existing && existing.contentHash === contentHash && !existing.deletedAt) {
+    if (!this.force && existing && existing.contentHash === contentHash && !existing.deletedAt) {
       return; // unchanged
     }
 
@@ -179,7 +182,13 @@ export class LibraryScanner {
     const needsReview = !common?.title || !common?.artist;
 
     const artistId = artistName ? await this.getOrCreateArtist(artistName) : null;
-    const albumId = albumTitle ? await this.getOrCreateAlbum(albumTitle, artistId) : null;
+    // Albums group under the album artist — the dedicated tag when present,
+    // else the primary credit (before the first comma) so features don't
+    // fragment one album into many.
+    const albumArtistName =
+      common?.albumartist?.trim() || artistName?.split(',')[0]?.trim() || null;
+    const albumArtistId = albumArtistName ? await this.getOrCreateArtist(albumArtistName) : null;
+    const albumId = albumTitle ? await this.getOrCreateAlbum(albumTitle, albumArtistId) : null;
 
     if (albumId && meta?.common.picture?.[0]) {
       await this.saveAlbumArt(albumId, meta.common.picture[0].data);

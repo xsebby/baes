@@ -592,7 +592,7 @@ export function AdminView({ navigate }: { navigate: (v: View) => void }) {
           {e.file}: {e.message}
         </div>
       ))}
-      <div style={{ padding: '10px 8px' }}>
+      <div style={{ padding: '10px 8px', display: 'flex', gap: 10 }}>
         <button
           className="primary"
           disabled={scan?.running}
@@ -601,6 +601,16 @@ export function AdminView({ navigate }: { navigate: (v: View) => void }) {
           }}
         >
           {scan?.running ? 'Scanning…' : 'Scan now'}
+        </button>
+        <button
+          className="iconbtn"
+          title="Re-reads tags for every file (use after grouping/tagging changes)"
+          disabled={scan?.running}
+          onClick={async () => {
+            setScan(await client.startScan(true));
+          }}
+        >
+          Rescan tags
         </button>
       </div>
 

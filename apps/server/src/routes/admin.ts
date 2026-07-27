@@ -72,8 +72,9 @@ export const adminRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
     return reply.code(204).send();
   });
 
-  app.post('/api/admin/scan', { preHandler: app.requireOwner }, async (_req, reply) => {
-    const started = scanner.start();
+  app.post('/api/admin/scan', { preHandler: app.requireOwner }, async (req, reply) => {
+    const force = Boolean((req.body as { force?: boolean } | null)?.force);
+    const started = scanner.start(force);
     return reply.code(started ? 202 : 409).send(scanner.getStatus());
   });
 

@@ -10,6 +10,8 @@ import type {
   LoginRequest,
   LoginResponse,
   PlayEventInput,
+  PlaylistDetail,
+  PlaylistSummary,
   RedeemInviteRequest,
   ScanStatus,
   Track,
@@ -138,6 +140,48 @@ export class ApiClient {
   /** Resolve a signed relative media path against the server base URL. */
   mediaUrl(relative: string): string {
     return `${this.baseUrl}${relative}`;
+  }
+
+  // ---- Playlists & likes ----
+
+  listPlaylists(): Promise<{ playlists: PlaylistSummary[] }> {
+    return this.request('GET', '/api/playlists');
+  }
+
+  createPlaylist(title: string): Promise<{ playlist: { id: string; title: string } }> {
+    return this.request('POST', '/api/playlists', { title });
+  }
+
+  getPlaylist(id: string): Promise<PlaylistDetail> {
+    return this.request('GET', `/api/playlists/${id}`);
+  }
+
+  deletePlaylist(id: string): Promise<void> {
+    return this.request('DELETE', `/api/playlists/${id}`);
+  }
+
+  addToPlaylist(playlistId: string, trackId: string): Promise<{ item: { id: string } }> {
+    return this.request('POST', `/api/playlists/${playlistId}/items`, { trackId });
+  }
+
+  removeFromPlaylist(playlistId: string, itemId: string): Promise<void> {
+    return this.request('DELETE', `/api/playlists/${playlistId}/items/${itemId}`);
+  }
+
+  listLikedTracks(): Promise<{ tracks: Track[] }> {
+    return this.request('GET', '/api/likes');
+  }
+
+  listLikedTrackIds(): Promise<{ trackIds: string[] }> {
+    return this.request('GET', '/api/likes/ids');
+  }
+
+  likeTrack(trackId: string): Promise<void> {
+    return this.request('PUT', `/api/tracks/${trackId}/like`);
+  }
+
+  unlikeTrack(trackId: string): Promise<void> {
+    return this.request('DELETE', `/api/tracks/${trackId}/like`);
   }
 
   // ---- Admin: library roots + scanning ----

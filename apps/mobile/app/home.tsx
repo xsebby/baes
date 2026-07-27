@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Pressable,
@@ -12,13 +13,13 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { AlbumSummary, ArtistSummary, Track } from '@baes/core';
+import type { AlbumSummary, ArtistSummary, PlaylistSummary, Track } from '@baes/core';
 import { useAuth } from '../src/auth';
 import { usePlayer } from '../src/player';
 import { NowPlayingBar } from '../src/components/NowPlayingBar';
 import { TrackRow } from '../src/components/TrackRow';
 
-type Segment = 'songs' | 'albums' | 'artists';
+type Segment = 'songs' | 'albums' | 'artists' | 'playlists';
 
 export default function Library() {
   const { client, user } = useAuth();
@@ -27,6 +28,7 @@ export default function Library() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [albums, setAlbums] = useState<AlbumSummary[]>([]);
   const [artists, setArtists] = useState<ArtistSummary[]>([]);
+  const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -38,14 +40,16 @@ export default function Library() {
       if (!client) return;
       setError(null);
       try {
-        const [t, al, ar] = await Promise.all([
+        const [t, al, ar, pl] = await Promise.all([
           client.listTracks({ q: q || undefined, limit: 500 }),
           client.listAlbums(),
           client.listArtists(),
+          client.listPlaylists(),
         ]);
         setTracks(t.tracks);
         setAlbums(al.albums);
         setArtists(ar.artists);
+        setPlaylists(pl.playlists);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load library');
       } finally {
@@ -137,6 +141,59 @@ export default function Library() {
       );
     }
 
+    if (segment === 'playlists') {
+      return (
+        <FlatList
+          key="playlists"
+          data={playlists}
+          keyExtractor={(p) => p.id}
+          refreshControl={refreshControl}
+          ListHeaderComponent={
+            <>
+              <Pressable style={styles.artistRow} onPress={() => router.push('/liked')}>
+                <View style={styles.artistBubble}>
+                  <Ionicons name="heart" size={20} color="#ff6b8a" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.artistName}>Liked songs</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#444" />
+              </Pressable>
+              <Pressable
+                style={styles.artistRow}
+                onPress={() =>
+                  Alert.prompt?.('New playlist', undefined, async (title) => {
+                    if (!client || !title?.trim()) return;
+                    await client.createPlaylist(title.trim());
+                    load(query);
+                  })
+                }
+              >
+                <View style={styles.artistBubble}>
+                  <Ionicons name="add" size={22} color="#8ab4ff" />
+                </View>
+                <Text style={[styles.artistName, { color: '#8ab4ff' }]}>New playlist…</Text>
+              </Pressable>
+            </>
+          }
+          renderItem={({ item }) => (
+            <Pressable style={styles.artistRow} onPress={() => router.push(`/playlist/${item.id}`)}>
+              <View style={styles.artistBubble}>
+                <Ionicons name="list" size={20} color="#666" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.artistName}>{item.title}</Text>
+                <Text style={styles.artistMeta}>
+                  {item.trackCount} track{item.trackCount === 1 ? '' : 's'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#444" />
+            </Pressable>
+          )}
+        />
+      );
+    }
+
     if (tracks.length === 0) {
       return (
         <View style={styles.empty}>
@@ -180,7 +237,7 @@ export default function Library() {
       </View>
 
       <View style={styles.segments}>
-        {(['songs', 'albums', 'artists'] as const).map((s) => (
+        {(['songs', 'albums', 'artists', 'playlists'] as const).map((s) => (
           <Pressable
             key={s}
             style={[styles.segment, segment === s && styles.segmentActive]}

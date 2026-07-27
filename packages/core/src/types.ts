@@ -108,3 +108,23 @@ export interface PlayEventInput {
   startedAt: string;
   deviceId?: string;
 }
+
+export interface PlaylistSummary {
+  id: string;
+  title: string;
+  source: 'local' | 'spotify';
+  createdAt: string;
+  trackCount: number;
+}
+
+export interface PlaylistItem {
+  itemId: string;
+  track: Track;
+}
+
+export interface PlaylistDetail {
+  id: string;
+  title: string;
+  source: 'local' | 'spotify';
+  items: PlaylistItem[];
+}

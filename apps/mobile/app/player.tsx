@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,10 +12,31 @@ export default function NowPlaying() {
     usePlayer();
   // While dragging, show the drag position instead of live playback position.
   const [dragSec, setDragSec] = useState<number | null>(null);
+  const [liked, setLiked] = useState(false);
+
+  useEffect(() => {
+    if (!client || !current) return;
+    client
+      .listLikedTrackIds()
+      .then((r) => setLiked(r.trackIds.includes(current.id)))
+      .catch(() => {});
+  }, [client, current?.id]);
 
   if (!current || !client) {
     router.back();
     return null;
+  }
+
+  async function toggleLike() {
+    if (!client || !current) return;
+    const next = !liked;
+    setLiked(next);
+    try {
+      if (next) await client.likeTrack(current.id);
+      else await client.unlikeTrack(current.id);
+    } catch {
+      setLiked(!next);
+    }
   }
 
   const shownSec = dragSec ?? positionSec;
@@ -30,15 +51,24 @@ export default function NowPlaying() {
         </View>
       )}
 
-      <View style={styles.meta}>
-        <Text style={styles.title} numberOfLines={2}>
-          {current.title}
-        </Text>
-        <Text style={styles.artist} numberOfLines={1}>
-          {current.artistName ?? 'Unknown artist'}
-          {current.albumTitle ? ` · ${current.albumTitle}` : ''}
-        </Text>
-        {current.needsReview && <Text style={styles.badge}>untagged — metadata inferred</Text>}
+      <View style={styles.metaRow}>
+        <View style={styles.meta}>
+          <Text style={styles.title} numberOfLines={2}>
+            {current.title}
+          </Text>
+          <Text style={styles.artist} numberOfLines={1}>
+            {current.artistName ?? 'Unknown artist'}
+            {current.albumTitle ? ` · ${current.albumTitle}` : ''}
+          </Text>
+          {current.needsReview && <Text style={styles.badge}>untagged — metadata inferred</Text>}
+        </View>
+        <Pressable onPress={toggleLike} hitSlop={10}>
+          <Ionicons
+            name={liked ? 'heart' : 'heart-outline'}
+            size={28}
+            color={liked ? '#ff6b8a' : '#888'}
+          />
+        </Pressable>
       </View>
 
       <View style={styles.scrubWrap}>
@@ -101,7 +131,14 @@ const styles = StyleSheet.create({
   art: { width: 320, height: 320, borderRadius: 16, maxWidth: '90%' },
   artPlaceholder: { backgroundColor: '#17171d', alignItems: 'center', justifyContent: 'center' },
   playNudge: { marginLeft: 4 },
-  meta: { alignItems: 'center', gap: 6, paddingHorizontal: 12 },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingHorizontal: 12,
+    width: '100%',
+  },
+  meta: { flex: 1, alignItems: 'center', gap: 6 },
   title: { color: '#fff', fontSize: 22, fontWeight: '800', textAlign: 'center' },
   artist: { color: '#999', fontSize: 15 },
   badge: { color: '#ff9f6b', fontSize: 12, marginTop: 4 },

@@ -1,5 +1,6 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import type { Track } from '@baes/core';
 import { useAuth } from '../auth';
 import { formatDuration, usePlayer } from '../player';
@@ -11,15 +12,24 @@ interface Props {
   showArt?: boolean;
   /** Show leading track number instead of art. */
   showTrackNo?: boolean;
+  /** Extra trailing control (e.g. remove-from-playlist button). */
+  trailing?: React.ReactNode;
 }
 
-export function TrackRow({ track, queue, showArt = true, showTrackNo = false }: Props) {
+export function TrackRow({ track, queue, showArt = true, showTrackNo = false, trailing }: Props) {
   const { client } = useAuth();
   const { playTrack, current, playing } = usePlayer();
   const active = current?.id === track.id;
 
   return (
-    <Pressable style={styles.row} onPress={() => playTrack(track, queue)}>
+    <Pressable
+      style={styles.row}
+      onPress={() => playTrack(track, queue)}
+      onLongPress={() =>
+        router.push({ pathname: '/add-to-playlist', params: { trackId: track.id } })
+      }
+      delayLongPress={350}
+    >
       {showTrackNo ? (
         <View style={styles.trackNo}>
           {active ? (
@@ -47,6 +57,7 @@ export function TrackRow({ track, queue, showArt = true, showTrackNo = false }: 
         </Text>
       </View>
       <Text style={styles.duration}>{formatDuration(track.durationMs)}</Text>
+      {trailing}
     </Pressable>
   );
 }

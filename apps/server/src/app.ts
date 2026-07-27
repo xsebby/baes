@@ -8,6 +8,7 @@ import authPlugin from './plugins/auth.js';
 import { authRoutes } from './routes/auth.js';
 import { adminRoutes } from './routes/admin.js';
 import { libraryRoutes } from './routes/library.js';
+import { playlistRoutes } from './routes/playlists.js';
 import { streamRoutes } from './routes/stream.js';
 
 export const APP_VERSION = '0.1.0';
@@ -35,6 +36,7 @@ export async function buildApp(config: Config) {
   await app.register(authRoutes, { db, config });
   await app.register(adminRoutes, { db, config, scanner });
   await app.register(libraryRoutes, { db, config });
+  await app.register(playlistRoutes, { db, config });
   await app.register(streamRoutes, { db, config });
 
   app.addHook('onClose', async () => {

@@ -23,6 +23,11 @@ export default function RootLayout() {
             name="player"
             options={{ title: '', presentation: 'modal', headerShown: true }}
           />
+          <Stack.Screen
+            name="add-to-playlist"
+            options={{ title: 'Add to…', presentation: 'modal', headerShown: true }}
+          />
+          <Stack.Screen name="liked" options={{ title: '' }} />
         </Stack>
       </PlayerProvider>
     </AuthProvider>

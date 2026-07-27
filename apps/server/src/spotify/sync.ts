@@ -23,6 +23,8 @@ export interface SpotifySyncStatus {
   playlists: number;
   tracks: number;
   matched: number;
+  /** Playlists Spotify refused to serve (their editorial/algorithmic lists 403 for dev apps). */
+  skipped: string[];
 }
 
 interface SpotifyTrackObj {
@@ -44,6 +46,7 @@ export class SpotifySync {
     playlists: 0,
     tracks: 0,
     matched: 0,
+    skipped: [],
   };
 
   constructor(
@@ -57,7 +60,7 @@ export class SpotifySync {
 
   start(userId: string): boolean {
     if (this.status.running) return false;
-    this.status = { ...this.status, running: true, lastError: null };
+    this.status = { ...this.status, running: true, lastError: null, skipped: [] };
     void this.run(userId)
       .then(() => {
         this.status.lastSyncAt = new Date().toISOString();
@@ -147,17 +150,23 @@ export class SpotifySync {
         .limit(1);
       if (existing && existing.snap === pl.snapshot_id) continue; // unchanged
 
-      const items = await this.fetchAll<{ track: SpotifyTrackObj | null }>(
-        token,
-        `/playlists/${pl.id}/tracks?limit=100`,
-      );
-      await this.mirrorPlaylist(userId, {
-        providerId: pl.id,
-        title: pl.name,
-        snapshotId: pl.snapshot_id,
-        tracks: items.map((i) => i.track).filter((t): t is SpotifyTrackObj => !!t?.id),
-        candidates,
-      });
+      // Spotify 403s their own editorial/algorithmic playlists for dev-mode
+      // apps — skip those rather than aborting the whole sync.
+      try {
+        const items = await this.fetchAll<{ track: SpotifyTrackObj | null }>(
+          token,
+          `/playlists/${pl.id}/tracks?limit=100`,
+        );
+        await this.mirrorPlaylist(userId, {
+          providerId: pl.id,
+          title: pl.name,
+          snapshotId: pl.snapshot_id,
+          tracks: items.map((i) => i.track).filter((t): t is SpotifyTrackObj => !!t?.id),
+          candidates,
+        });
+      } catch (err) {
+        this.status.skipped.push(pl.name || pl.id);
+      }
     }
 
     await this.db

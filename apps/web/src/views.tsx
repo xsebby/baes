@@ -643,6 +643,9 @@ function SpotifySection() {
                 ? `last sync ${new Date(status.lastSyncAt).toLocaleString()} — ${status.sync.matched} matched to your library`
                 : 'never synced'}
             {status.sync.lastError ? ` — error: ${status.sync.lastError}` : ''}
+            {status.sync.skipped.length
+              ? ` — ${status.sync.skipped.length} Spotify-owned playlists unavailable (${status.sync.skipped.slice(0, 3).join(', ')}${status.sync.skipped.length > 3 ? '…' : ''})`
+              : ''}
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
             <button

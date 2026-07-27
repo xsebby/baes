@@ -153,5 +153,6 @@ export interface SpotifyStatus {
     playlists: number;
     tracks: number;
     matched: number;
+    skipped: string[];
   };
 }

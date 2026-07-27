@@ -19,6 +19,10 @@ export default function RootLayout() {
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="home" options={{ title: 'baes' }} />
           <Stack.Screen name="admin" options={{ title: 'Admin' }} />
+          <Stack.Screen
+            name="player"
+            options={{ title: '', presentation: 'modal', headerShown: true }}
+          />
         </Stack>
       </PlayerProvider>
     </AuthProvider>

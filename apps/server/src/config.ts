@@ -13,8 +13,9 @@ const envSchema = z.object({
   INVITE_TTL_HOURS: z.coerce.number().default(72),
   // Extracted cover art and other server-generated files live here.
   DATA_DIR: z.string().default('.data'),
-  // Lifetime of signed stream/art URLs.
-  MEDIA_URL_TTL_SECONDS: z.coerce.number().default(900),
+  // Lifetime of signed stream/art URLs. Must comfortably outlast the longest
+  // track — AVPlayer keeps range-requesting the same URL for the whole play.
+  MEDIA_URL_TTL_SECONDS: z.coerce.number().default(3600),
 });
 
 export type Config = z.infer<typeof envSchema>;

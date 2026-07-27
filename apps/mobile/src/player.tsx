@@ -7,12 +7,14 @@ interface PlayerState {
   current: Track | null;
   queue: Track[];
   playing: boolean;
+  loading: boolean;
   positionSec: number;
   durationSec: number;
   playTrack: (track: Track, queue?: Track[]) => void;
   toggle: () => void;
   next: () => void;
   previous: () => void;
+  seekTo: (seconds: number) => void;
 }
 
 const PlayerContext = createContext<PlayerState | null>(null);
@@ -21,12 +23,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const { client } = useAuth();
   const [current, setCurrent] = useState<Track | null>(null);
   const [queue, setQueue] = useState<Track[]>([]);
+  const [loading, setLoading] = useState(false);
   const player = useAudioPlayer(null);
   const status = useAudioPlayerStatus(player);
 
   useEffect(() => {
-    // Keep playing when the phone is on silent; background audio proper lands with M2's dev build.
-    setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: true,
+      interruptionMode: 'doNotMix',
+    }).catch(() => {});
   }, []);
 
   const playTrack = useCallback(
@@ -34,8 +40,35 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       if (!client) return;
       setCurrent(track);
       if (newQueue) setQueue(newQueue);
-      player.replace({ uri: client.mediaUrl(track.streamUrl) });
-      player.play();
+      setLoading(true);
+      void (async () => {
+        // Always fetch a fresh signed URL — the one embedded in a library
+        // listing may have expired while the app sat open.
+        let streamPath = track.streamUrl;
+        try {
+          const fresh = await client.refreshStreamUrl(track.id);
+          streamPath = fresh.url;
+        } catch {
+          // offline or transient failure — try the embedded URL anyway
+        }
+        player.replace({ uri: client.mediaUrl(streamPath) });
+        player.play();
+        try {
+          player.setActiveForLockScreen(
+            true,
+            {
+              title: track.title,
+              artist: track.artistName ?? 'Unknown artist',
+              albumTitle: track.albumTitle ?? undefined,
+              artworkUrl: track.artUrl ? client.mediaUrl(track.artUrl) : undefined,
+            },
+            { showSeekBackward: false, showSeekForward: false },
+          );
+        } catch {
+          // older native runtime without lock-screen support — playback still works
+        }
+        setLoading(false);
+      })();
     },
     [client, player],
   );
@@ -44,6 +77,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (status.playing) player.pause();
     else player.play();
   }, [player, status.playing]);
+
+  const seekTo = useCallback(
+    (seconds: number) => {
+      void player.seekTo(seconds);
+    },
+    [player],
+  );
 
   const skipTo = useCallback(
     (direction: 1 | -1) => {
@@ -65,22 +105,26 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       current,
       queue,
       playing: status.playing ?? false,
+      loading,
       positionSec: status.currentTime ?? 0,
       durationSec: status.duration ?? 0,
       playTrack,
       toggle,
       next: () => skipTo(1),
       previous: () => skipTo(-1),
+      seekTo,
     }),
     [
       current,
       queue,
+      loading,
       status.playing,
       status.currentTime,
       status.duration,
       playTrack,
       toggle,
       skipTo,
+      seekTo,
     ],
   );
 
@@ -98,4 +142,8 @@ export function formatDuration(ms: number): string {
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+export function formatSeconds(sec: number): string {
+  return formatDuration(sec * 1000);
 }

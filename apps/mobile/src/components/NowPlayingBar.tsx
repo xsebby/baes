@@ -1,4 +1,5 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { useAuth } from '../auth';
 import { usePlayer } from '../player';
 
@@ -10,7 +11,7 @@ export function NowPlayingBar() {
   const progress = durationSec > 0 ? Math.min(positionSec / durationSec, 1) : 0;
 
   return (
-    <View style={styles.wrap}>
+    <Pressable style={styles.wrap} onPress={() => router.push('/player')}>
       <View style={[styles.progress, { width: `${progress * 100}%` }]} />
       <View style={styles.row}>
         {current.artUrl ? (
@@ -28,14 +29,28 @@ export function NowPlayingBar() {
             {current.artistName ?? 'Unknown artist'}
           </Text>
         </View>
-        <Pressable onPress={toggle} style={styles.button} hitSlop={8}>
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation();
+            toggle();
+          }}
+          style={styles.button}
+          hitSlop={8}
+        >
           <Text style={styles.buttonText}>{playing ? '⏸' : '▶'}</Text>
         </Pressable>
-        <Pressable onPress={next} style={styles.button} hitSlop={8}>
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation();
+            next();
+          }}
+          style={styles.button}
+          hitSlop={8}
+        >
           <Text style={styles.buttonText}>⏭</Text>
         </Pressable>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

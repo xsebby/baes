@@ -4,6 +4,7 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@baes/core": "workspace:*",
+    "@react-native-community/slider": "5.2.0",
     "expo": "~57.0.8",
     "expo-audio": "~57.0.3",
     "expo-constants": "~57.0.7",

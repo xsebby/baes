@@ -115,6 +115,7 @@ export interface PlaylistSummary {
   source: 'local' | 'spotify';
   createdAt: string;
   trackCount: number;
+  artUrl: string | null;
 }
 
 export interface ExternalTrackMeta {
@@ -139,6 +140,7 @@ export interface PlaylistDetail {
   id: string;
   title: string;
   source: 'local' | 'spotify';
+  artUrl: string | null;
   items: PlaylistItem[];
 }
 
@@ -155,4 +157,19 @@ export interface SpotifyStatus {
     matched: number;
     skipped: string[];
   };
+}
+
+
+export interface ImportJob {
+  id: string;
+  url: string;
+  status: 'running' | 'done' | 'error';
+  error: string | null;
+  startedAt: string;
+}
+
+export interface TrackPatch {
+  title?: string;
+  artistName?: string | null;
+  albumTitle?: string | null;
 }

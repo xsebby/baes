@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { and, eq, isNull } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 import {
@@ -52,6 +54,7 @@ export class SpotifySync {
   constructor(
     private readonly db: Database,
     private readonly config: Config,
+    private readonly artDir: string,
   ) {}
 
   getStatus(): SpotifySyncStatus {
@@ -141,6 +144,7 @@ export class SpotifySync {
       id: string;
       name: string;
       snapshot_id: string;
+      images?: { url: string }[] | null;
       tracks: { total: number };
     }>(token, '/me/playlists?limit=50');
     this.status.playlists = lists.length + 1;
@@ -167,6 +171,7 @@ export class SpotifySync {
           snapshotId: pl.snapshot_id,
           tracks: items.map((i) => i.item).filter((t): t is SpotifyTrackObj => !!t?.id),
           candidates,
+          imageUrl: pl.images?.[0]?.url ?? null,
         });
       } catch (err) {
         this.status.skipped.push(pl.name || pl.id);
@@ -269,6 +274,18 @@ export class SpotifySync {
     return created!.id;
   }
 
+  private async savePlaylistArt(playlistId: string, url: string): Promise<void> {
+    const res = await fetch(url);
+    if (!res.ok) return;
+    await mkdir(this.artDir, { recursive: true });
+    const file = path.join(this.artDir, `playlist-${playlistId}.jpg`);
+    await writeFile(file, Buffer.from(await res.arrayBuffer()));
+    await this.db
+      .update(playlists)
+      .set({ artPath: file, updatedSeq: bumpSeq })
+      .where(eq(playlists.id, playlistId));
+  }
+
   private async mirrorPlaylist(
     userId: string,
     opts: {
@@ -277,6 +294,7 @@ export class SpotifySync {
       snapshotId: string | null;
       tracks: SpotifyTrackObj[];
       candidates: LocalCandidate[];
+      imageUrl?: string | null;
     },
   ): Promise<void> {
     let [playlist] = await this.db
@@ -308,6 +326,10 @@ export class SpotifySync {
         .where(eq(playlists.id, playlist.id));
       // Mirror is authoritative: rebuild items from the source list.
       await this.db.delete(playlistItems).where(eq(playlistItems.playlistId, playlist.id));
+    }
+
+    if (opts.imageUrl) {
+      await this.savePlaylistArt(playlist!.id, opts.imageUrl).catch(() => {});
     }
 
     let position = 1;

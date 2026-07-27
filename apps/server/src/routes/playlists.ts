@@ -60,6 +60,7 @@ export const playlistRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, c
         title: playlists.title,
         source: playlists.source,
         createdAt: playlists.createdAt,
+        hasArt: sql<boolean>`${playlists.artPath} is not null`,
         trackCount: sql<number>`count(${playlistItems.id})::int`,
       })
       .from(playlists)
@@ -68,9 +69,22 @@ export const playlistRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, c
         and(eq(playlistItems.playlistId, playlists.id), isNull(playlistItems.deletedAt)),
       )
       .where(and(eq(playlists.ownerId, req.authUser!.id), isNull(playlists.deletedAt)))
-      .groupBy(playlists.id, playlists.title, playlists.source, playlists.createdAt)
+      .groupBy(
+        playlists.id,
+        playlists.title,
+        playlists.source,
+        playlists.createdAt,
+        playlists.artPath,
+      )
       .orderBy(asc(playlists.createdAt));
-    return { playlists: rows };
+    return {
+      playlists: rows.map(({ hasArt, ...r }) => ({
+        ...r,
+        artUrl: hasArt
+          ? mediaPath('art', r.id, config.SERVER_SECRET, config.MEDIA_URL_TTL_SECONDS).url
+          : null,
+      })),
+    };
   });
 
   app.post('/api/playlists', { preHandler: app.requireAuth }, async (req, reply) => {
@@ -173,7 +187,15 @@ export const playlistRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, c
       ];
     });
 
-    return { id: playlist.id, title: playlist.title, source: playlist.source, items };
+    return {
+      id: playlist.id,
+      title: playlist.title,
+      source: playlist.source,
+      artUrl: playlist.artPath
+        ? mediaPath('art', playlist.id, config.SERVER_SECRET, config.MEDIA_URL_TTL_SECONDS).url
+        : null,
+      items,
+    };
   });
 
   app.delete('/api/playlists/:id', { preHandler: app.requireAuth }, async (req, reply) => {

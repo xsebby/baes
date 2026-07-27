@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyPluginAsync } from 'fastify';
 import { and, eq, isNull } from 'drizzle-orm';
-import { albums, libraryRoots, tracks } from '@baes/db';
+import { albums, libraryRoots, playlists, tracks } from '@baes/db';
 import type { Database } from '../db.js';
 import type { Config } from '../config.js';
 import { verifyMedia } from '../library/signing.js';
@@ -94,21 +94,31 @@ export const streamRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
       .send(createReadStream(filePath));
   });
 
-  app.get('/api/art/:albumId', async (req, reply) => {
-    const { albumId } = req.params as { albumId: string };
+  // Serves album covers and playlist covers by row id.
+  app.get('/api/art/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
     const { exp, sig } = req.query as { exp?: string; sig?: string };
-    if (!exp || !sig || !verifyMedia(config.SERVER_SECRET, 'art', albumId, Number(exp), sig)) {
+    if (!exp || !sig || !verifyMedia(config.SERVER_SECRET, 'art', id, Number(exp), sig)) {
       return reply.code(403).send({ error: 'forbidden', message: 'Invalid or expired URL' });
     }
     const [album] = await db
       .select({ artPath: albums.artPath })
       .from(albums)
-      .where(eq(albums.id, albumId))
+      .where(eq(albums.id, id))
       .limit(1);
-    if (!album?.artPath) {
-      return reply.code(404).send({ error: 'not_found', message: 'No art for album' });
+    let artPath = album?.artPath ?? null;
+    if (!artPath) {
+      const [pl] = await db
+        .select({ artPath: playlists.artPath })
+        .from(playlists)
+        .where(eq(playlists.id, id))
+        .limit(1);
+      artPath = pl?.artPath ?? null;
+    }
+    if (!artPath) {
+      return reply.code(404).send({ error: 'not_found', message: 'No art' });
     }
     reply.header('Cache-Control', 'private, max-age=86400');
-    return reply.type('image/jpeg').send(createReadStream(album.artPath));
+    return reply.type('image/jpeg').send(createReadStream(artPath));
   });
 };

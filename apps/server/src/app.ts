@@ -8,6 +8,7 @@ import { createDb } from './db.js';
 import { LibraryScanner } from './library/scanner.js';
 import authPlugin from './plugins/auth.js';
 import { authRoutes } from './routes/auth.js';
+import { ingestRoutes } from './routes/ingest.js';
 import { adminRoutes } from './routes/admin.js';
 import { libraryRoutes } from './routes/library.js';
 import { playlistRoutes } from './routes/playlists.js';
@@ -40,11 +41,12 @@ export async function buildApp(config: Config) {
 
   await app.register(authRoutes, { db, config });
   await app.register(adminRoutes, { db, config, scanner });
+  await app.register(ingestRoutes, { db, config, scanner });
   await app.register(libraryRoutes, { db, config });
   await app.register(playlistRoutes, { db, config });
   await app.register(streamRoutes, { db, config });
 
-  const spotifySync = new SpotifySync(db, config);
+  const spotifySync = new SpotifySync(db, config, path.join(config.DATA_DIR, 'art'));
   await app.register(spotifyRoutes, { db, config, sync: spotifySync });
 
   // Hourly mirror refresh for the owner account (single-user server).

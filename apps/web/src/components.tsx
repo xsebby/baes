@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import type { PlaylistSummary, Track } from '@baes/core';
+import type { PlaylistSummary, Track, TrackPatch } from '@baes/core';
 import { formatSeconds, formatDuration, useAuth } from './state';
 import { usePlayer } from './player';
 
@@ -55,11 +55,13 @@ export function TrackRow({
   track,
   queue,
   onAddToPlaylist,
+  onEdit,
   trailing,
 }: {
   track: Track;
   queue: Track[];
   onAddToPlaylist: (track: Track) => void;
+  onEdit?: (track: Track) => void;
   trailing?: React.ReactNode;
 }) {
   const { client } = useAuth();
@@ -102,6 +104,18 @@ export function TrackRow({
       >
         +
       </button>
+      {onEdit && (
+        <button
+          className="rowbtn"
+          title="Edit metadata"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(track);
+          }}
+        >
+          ✎
+        </button>
+      )}
       <div className="dur">{formatDuration(track.durationMs)}</div>
       {trailing}
     </div>
@@ -256,6 +270,67 @@ export function PlayerBar() {
           value={volume}
           onChange={(e) => setVolume(Number(e.target.value))}
         />
+      </div>
+    </div>
+  );
+}
+
+
+// ---- edit-track modal ----
+
+export function EditTrackModal({
+  track,
+  onClose,
+  onSaved,
+}: {
+  track: Track;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { client } = useAuth();
+  const [title, setTitle] = useState(track.title);
+  const [artist, setArtist] = useState(track.artistName ?? '');
+  const [album, setAlbum] = useState(track.albumTitle ?? '');
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    if (busy) return;
+    setBusy(true);
+    const patch: TrackPatch = {};
+    if (title.trim() && title.trim() !== track.title) patch.title = title.trim();
+    if (artist.trim() !== (track.artistName ?? '')) patch.artistName = artist.trim() || null;
+    if (album.trim() !== (track.albumTitle ?? '')) patch.albumTitle = album.trim() || null;
+    try {
+      await client.updateTrack(track.id, patch);
+      onSaved();
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3>Edit track</h3>
+        <label className="muted small">Title</label>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} />
+        <label className="muted small">Artist</label>
+        <input
+          value={artist}
+          placeholder="Unknown artist"
+          onChange={(e) => setArtist(e.target.value)}
+        />
+        <label className="muted small">Album</label>
+        <input value={album} placeholder="No album" onChange={(e) => setAlbum(e.target.value)} />
+        <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+          <button className="primary" disabled={busy || !title.trim()} onClick={save}>
+            Save
+          </button>
+          <button className="iconbtn" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
   );

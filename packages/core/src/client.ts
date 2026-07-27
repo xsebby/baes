@@ -13,8 +13,10 @@ import type {
   PlaylistDetail,
   PlaylistSummary,
   RedeemInviteRequest,
+  ImportJob,
   ScanStatus,
   SpotifyStatus,
+  TrackPatch,
   Track,
   User,
 } from './types.js';
@@ -225,5 +227,35 @@ export class ApiClient {
 
   scanStatus(): Promise<ScanStatus> {
     return this.request('GET', '/api/admin/scan/status');
+  }
+
+  // ---- Ingest ----
+
+  updateTrack(id: string, patch: TrackPatch): Promise<void> {
+    return this.request('PATCH', `/api/tracks/${id}`, patch);
+  }
+
+  importUrl(url: string): Promise<{ job: ImportJob }> {
+    return this.request('POST', '/api/import-url', { url });
+  }
+
+  listImportJobs(): Promise<{ jobs: ImportJob[] }> {
+    return this.request('GET', '/api/import-jobs');
+  }
+
+  /** Multipart upload (browser): pass a FormData with one or more `file` parts. */
+  async uploadFiles(form: FormData): Promise<{ saved: string[]; rejected: string[] }> {
+    const headers: Record<string, string> = {};
+    const token = await this.getToken();
+    if (token) headers.authorization = `Bearer ${token}`;
+    const res = await this.fetchImpl(`${this.baseUrl}/api/upload`, {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+    if (!res.ok) {
+      throw new ApiError(res.status, 'upload_failed', `Upload failed (${res.status})`);
+    }
+    return (await res.json()) as { saved: string[]; rejected: string[] };
   }
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
+  ImportJob,
   SpotifyStatus,
   AlbumDetail,
   AlbumSummary,
@@ -13,7 +14,7 @@ import type {
 } from '@baes/core';
 import { formatDuration, useAuth } from './state';
 import { usePlayer } from './player';
-import { TrackRow } from './components';
+import { EditTrackModal, TrackRow } from './components';
 
 export type View =
   | { type: 'library' }
@@ -92,6 +93,7 @@ export function LibraryView({ navigate, onAddToPlaylist, query }: ViewProps & { 
   const [artists, setArtists] = useState<ArtistSummary[]>([]);
   const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editTrack, setEditTrack] = useState<Track | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(
@@ -140,7 +142,13 @@ export function LibraryView({ navigate, onAddToPlaylist, query }: ViewProps & { 
             <div className="empty">{query ? 'No matches' : 'No music yet — scan in Admin'}</div>
           ) : (
             tracks.map((t) => (
-              <TrackRow key={t.id} track={t} queue={tracks} onAddToPlaylist={onAddToPlaylist} />
+              <TrackRow
+                key={t.id}
+                track={t}
+                queue={tracks}
+                onAddToPlaylist={onAddToPlaylist}
+                onEdit={setEditTrack}
+              />
             ))
           )
         ) : segment === 'albums' ? (
@@ -206,7 +214,16 @@ export function LibraryView({ navigate, onAddToPlaylist, query }: ViewProps & { 
                 className="list-row"
                 onClick={() => navigate({ type: 'playlist', id: p.id })}
               >
-                <div className="bubble">☰</div>
+                {p.artUrl ? (
+                  <img
+                    className="bubble"
+                    style={{ borderRadius: 8, objectFit: 'cover' }}
+                    src={client.mediaUrl(p.artUrl)}
+                    alt=""
+                  />
+                ) : (
+                  <div className="bubble">☰</div>
+                )}
                 <div className="name">{p.title}</div>
                 <div className="count">{p.trackCount} tracks</div>
               </div>
@@ -214,6 +231,13 @@ export function LibraryView({ navigate, onAddToPlaylist, query }: ViewProps & { 
           </>
         )}
       </div>
+      {editTrack && (
+        <EditTrackModal
+          track={editTrack}
+          onClose={() => setEditTrack(null)}
+          onSaved={() => load(query)}
+        />
+      )}
     </>
   );
 }
@@ -356,6 +380,9 @@ export function PlaylistView({ id, navigate, onAddToPlaylist }: ViewProps & { id
   return (
     <DetailShell navigate={navigate}>
       <div className="detail-header">
+        {playlist.artUrl ? (
+          <img className="cover" src={client.mediaUrl(playlist.artUrl)} alt="" />
+        ) : null}
         <div>
           <h2>{playlist.title}</h2>
           <div className="sub">{playlist.items.length} tracks</div>
@@ -583,6 +610,8 @@ export function AdminView({ navigate }: { navigate: (v: View) => void }) {
         </div>
       )}
 
+      <IngestSection />
+
       <SpotifySection />
 
       <div style={{ padding: '30px 8px' }}>
@@ -672,6 +701,111 @@ function SpotifySection() {
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+
+function IngestSection() {
+  const { client } = useAuth();
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [url, setUrl] = useState('');
+  const [jobs, setJobs] = useState<ImportJob[]>([]);
+
+  const refreshJobs = useCallback(() => {
+    client.listImportJobs().then((r) => setJobs(r.jobs)).catch(() => {});
+  }, [client]);
+  useEffect(refreshJobs, [refreshJobs]);
+
+  useEffect(() => {
+    if (!jobs.some((j) => j.status === 'running')) return;
+    const t = setInterval(refreshJobs, 2000);
+    return () => clearInterval(t);
+  }, [jobs, refreshJobs]);
+
+  async function onFiles(files: FileList | null) {
+    if (!files?.length) return;
+    setBusy(true);
+    setUploadMsg(null);
+    try {
+      const form = new FormData();
+      for (const f of files) form.append('file', f);
+      const res = await client.uploadFiles(form);
+      setUploadMsg(
+        `${res.saved.length} uploaded${res.rejected.length ? `, ${res.rejected.length} rejected (not audio)` : ''} — scanning…`,
+      );
+    } catch (e) {
+      setUploadMsg(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function startImport() {
+    if (!url.trim()) return;
+    try {
+      await client.importUrl(url.trim());
+      setUrl('');
+      refreshJobs();
+    } catch (e) {
+      setUploadMsg(e instanceof Error ? e.message : 'Import failed');
+    }
+  }
+
+  return (
+    <>
+      <div className="section-title">Upload music</div>
+      <div style={{ padding: '4px 8px' }}>
+        <input
+          type="file"
+          accept="audio/*,.mp3,.flac,.wav,.m4a,.aac,.ogg,.opus,.aiff"
+          multiple
+          disabled={busy}
+          onChange={(e) => onFiles(e.target.files)}
+        />
+        {uploadMsg && (
+          <div className="muted small" style={{ marginTop: 6 }}>
+            {uploadMsg}
+          </div>
+        )}
+      </div>
+
+      <div className="section-title">Import from URL</div>
+      <div style={{ display: 'flex', gap: 8, padding: '4px 8px' }}>
+        <input
+          style={{
+            flex: 1,
+            maxWidth: 420,
+            background: 'var(--panel)',
+            border: 'none',
+            borderRadius: 8,
+            padding: '10px 12px',
+            color: 'var(--text)',
+          }}
+          placeholder="https://soundcloud.com/…"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && startImport()}
+        />
+        <button className="primary" onClick={startImport}>
+          Import
+        </button>
+      </div>
+      {jobs.slice(0, 5).map((j) => (
+        <div key={j.id} className="small" style={{ padding: '2px 8px' }}>
+          <span
+            style={{
+              color:
+                j.status === 'done' ? '#7dd87d' : j.status === 'error' ? 'var(--danger)' : 'var(--accent)',
+            }}
+          >
+            {j.status}
+          </span>{' '}
+          <span className="muted">{j.url.slice(0, 60)}</span>
+          {j.error && <span style={{ color: 'var(--danger)' }}> — {j.error}</span>}
+        </div>
+      ))}
     </>
   );
 }

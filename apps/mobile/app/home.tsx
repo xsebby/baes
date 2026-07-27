@@ -178,9 +178,13 @@ export default function Library() {
           }
           renderItem={({ item }) => (
             <Pressable style={styles.artistRow} onPress={() => router.push(`/playlist/${item.id}`)}>
-              <View style={styles.artistBubble}>
-                <Ionicons name="list" size={20} color="#666" />
-              </View>
+              {item.artUrl && client ? (
+                <Image source={{ uri: client.mediaUrl(item.artUrl) }} style={styles.playlistArt} />
+              ) : (
+                <View style={styles.artistBubble}>
+                  <Ionicons name="list" size={20} color="#666" />
+                </View>
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={styles.artistName}>{item.title}</Text>
                 <Text style={styles.artistMeta}>
@@ -306,6 +310,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  playlistArt: { width: 44, height: 44, borderRadius: 8 },
   artistName: { color: '#fff', fontSize: 15, fontWeight: '500' },
   artistMeta: { color: '#888', fontSize: 13, marginTop: 2 },
   error: { color: '#ff6b6b', textAlign: 'center', marginTop: 40, paddingHorizontal: 24 },

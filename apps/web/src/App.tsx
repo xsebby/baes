@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './state';
 import { PlayerProvider } from './player';
 import { AddToPlaylistModal, LikesProvider, PlayerBar } from './components';
 import { FullscreenPlayer } from './Fullscreen';
+import { ACCENTS, applyTheme, loadTheme, saveTheme, type ThemeSettings } from './theme';
 import {
   AdminView,
   AlbumView,
@@ -19,11 +20,13 @@ function Main() {
   const { user } = useAuth();
   useEffect(() => {
     if (navigator.userAgent.includes('Electron')) document.body.classList.add('electron');
+    applyTheme(loadTheme());
   }, []);
   const [view, setView] = useState<View>({ type: 'library' });
   const [query, setQuery] = useState('');
   const [modalTrack, setModalTrack] = useState<Track | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [showAppearance, setShowAppearance] = useState(false);
 
   const common = { navigate: setView, onAddToPlaylist: setModalTrack };
 
@@ -43,6 +46,9 @@ function Main() {
           <span className="spacer" />
         )}
         <span className="spacer" />
+        <button className="iconbtn" title="Appearance" onClick={() => setShowAppearance(true)}>
+          🎨
+        </button>
         {user?.role === 'owner' && (
           <button className="iconbtn" title="Admin" onClick={() => setView({ type: 'admin' })}>
             ⚙
@@ -59,8 +65,72 @@ function Main() {
 
       <PlayerBar onExpand={() => setFullscreen(true)} />
       {fullscreen && <FullscreenPlayer onClose={() => setFullscreen(false)} />}
+      {showAppearance && <AppearanceModal onClose={() => setShowAppearance(false)} />}
       {modalTrack && <AddToPlaylistModal track={modalTrack} onClose={() => setModalTrack(null)} />}
     </>
+  );
+}
+
+function AppearanceModal({ onClose }: { onClose: () => void }) {
+  const [theme, setTheme] = useState<ThemeSettings>(loadTheme);
+
+  function update(patch: Partial<ThemeSettings>) {
+    const next = { ...theme, ...patch };
+    setTheme(next);
+    saveTheme(next);
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3>Appearance</h3>
+
+        <div className="muted small">Accent</div>
+        <div className="swatches">
+          {ACCENTS.map((a) => (
+            <button
+              key={a.value}
+              className={`swatch${theme.accent === a.value ? ' active' : ''}`}
+              style={{ background: a.value }}
+              title={a.name}
+              onClick={() => update({ accent: a.value })}
+            />
+          ))}
+        </div>
+
+        <div className="muted small">Panels</div>
+        <div className="opt-row">
+          {(['opaque', 'clear'] as const).map((p) => (
+            <button
+              key={p}
+              className={`opt${theme.panels === p ? ' active' : ''}`}
+              onClick={() => update({ panels: p })}
+            >
+              {p === 'opaque' ? 'Opaque' : 'Clear glass'}
+            </button>
+          ))}
+        </div>
+
+        <div className="muted small">Fullscreen background</div>
+        <div className="opt-row">
+          {(
+            [
+              ['aurora', 'Aurora'],
+              ['pulse', 'Pulse'],
+              ['minimal', 'Minimal'],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              className={`opt${theme.fsStyle === key ? ' active' : ''}`}
+              onClick={() => update({ fsStyle: key })}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

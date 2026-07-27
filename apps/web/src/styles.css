@@ -504,11 +504,62 @@ input {
   align-items: center;
   justify-content: center;
 }
-.fs-blobs {
+.fs-bg {
   position: absolute;
   inset: -20%;
   filter: blur(90px) saturate(1.4);
   opacity: 0.55;
+}
+.fs-sheen {
+  position: absolute;
+  inset: 10%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 12%,
+    transparent 30%,
+    rgba(255, 255, 255, 0.18) 55%,
+    transparent 75%
+  );
+  animation: sheenspin 40s linear infinite;
+  mix-blend-mode: overlay;
+}
+@keyframes sheenspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.fs-pulse {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 70vmax;
+  height: 70vmax;
+  margin: -35vmax 0 0 -35vmax;
+  border-radius: 50%;
+  animation: fspulse 2.2s ease-in-out infinite;
+}
+@keyframes fspulse {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.85;
+  }
+}
+.fs-minimal-grad {
+  position: absolute;
+  inset: 0;
+  opacity: 0.35;
+}
+.fs-seek {
+  flex: 1;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 .fs-blob {
   position: absolute;
@@ -652,4 +703,55 @@ input {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* ---- appearance: translucent panels ---- */
+body.panels-clear {
+  --panel: rgba(255, 255, 255, 0.07);
+  --panel-2: rgba(255, 255, 255, 0.12);
+}
+body.panels-clear .playerbar,
+body.panels-clear .modal,
+body.panels-clear .topbar input,
+body.panels-clear .iconbtn,
+body.panels-clear .segment {
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+body.panels-clear .playerbar {
+  background: rgba(23, 23, 29, 0.55);
+}
+
+/* ---- appearance modal swatches ---- */
+.swatches {
+  display: flex;
+  gap: 10px;
+  padding: 6px 0 14px;
+}
+.swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+.swatch.active {
+  border-color: #fff;
+}
+.opt-row {
+  display: flex;
+  gap: 8px;
+  padding: 6px 0 14px;
+}
+.opt {
+  background: var(--panel-2);
+  border-radius: 16px;
+  padding: 7px 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.opt.active {
+  background: #fff;
+  color: #000;
+  font-weight: 600;
 }

@@ -49,17 +49,22 @@ export async function buildApp(config: Config) {
   const spotifySync = new SpotifySync(db, config, path.join(config.DATA_DIR, 'art'));
   await app.register(spotifyRoutes, { db, config, sync: spotifySync });
 
-  // Hourly mirror refresh for the owner account (single-user server).
+  // Mirror refresh for the owner account (single-user server): shortly after
+  // boot — so freshly deployed sync fixes take effect without manual action —
+  // then hourly.
   if (config.SPOTIFY_CLIENT_ID && config.NODE_ENV !== 'test') {
-    const interval = setInterval(
-      async () => {
-        const [owner] = await db.select({ id: users.id }).from(users).limit(1);
-        if (owner) spotifySync.start(owner.id);
-      },
-      config.SPOTIFY_SYNC_INTERVAL_MINUTES * 60 * 1000,
-    );
+    const kick = async () => {
+      const [owner] = await db.select({ id: users.id }).from(users).limit(1);
+      if (owner) spotifySync.start(owner.id);
+    };
+    const bootSync = setTimeout(() => void kick(), 45 * 1000);
+    bootSync.unref();
+    const interval = setInterval(kick, config.SPOTIFY_SYNC_INTERVAL_MINUTES * 60 * 1000);
     interval.unref();
-    app.addHook('onClose', async () => clearInterval(interval));
+    app.addHook('onClose', async () => {
+      clearTimeout(bootSync);
+      clearInterval(interval);
+    });
   }
 
   // Serve the built web client (SPA) when present; API keeps /api/*.

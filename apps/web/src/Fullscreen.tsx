@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { formatSeconds, useAuth } from './state';
 import { usePlayer } from './player';
+import { loadTheme } from './theme';
 
 /** Average color of a region of the cover, sampled via canvas. */
 function sampleColors(img: HTMLImageElement): string[] {
@@ -30,7 +31,6 @@ function sampleColors(img: HTMLImageElement): string[] {
       b += data[i + 2]!;
       n++;
     }
-    // Boost saturation a touch so washed-out covers still glow.
     const boost = (v: number) => Math.min(255, Math.round((v / n) * 1.25));
     colors.push(`rgb(${boost(r)}, ${boost(g)}, ${boost(b)})`);
   }
@@ -39,8 +39,11 @@ function sampleColors(img: HTMLImageElement): string[] {
 
 export function FullscreenPlayer({ onClose }: { onClose: () => void }) {
   const { client } = useAuth();
-  const { current, playing, positionSec, durationSec, toggle, next, previous } = usePlayer();
+  const { current, playing, positionSec, durationSec, toggle, next, previous, seekTo } =
+    usePlayer();
   const [colors, setColors] = useState<string[]>(['#3a2f5c', '#1c4a5e', '#5c2f45', '#2f5c3a']);
+  const [dragSec, setDragSec] = useState<number | null>(null);
+  const fsStyle = loadTheme().fsStyle;
 
   const artSrc = current?.artUrl ? client.mediaUrl(current.artUrl) : null;
 
@@ -65,20 +68,35 @@ export function FullscreenPlayer({ onClose }: { onClose: () => void }) {
         e.preventDefault();
         toggle();
       }
+      if (e.key === 'ArrowRight') seekTo(Math.min(positionSec + 10, durationSec));
+      if (e.key === 'ArrowLeft') seekTo(Math.max(positionSec - 10, 0));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, toggle]);
+  }, [onClose, toggle, seekTo, positionSec, durationSec]);
 
   if (!current) return null;
-  const progress = durationSec > 0 ? positionSec / durationSec : 0;
+  const shown = dragSec ?? positionSec;
 
   return (
-    <div className="fs" onDoubleClick={onClose}>
-      <div className="fs-blobs" aria-hidden>
-        {colors.map((c, i) => (
-          <div key={i} className={`fs-blob fs-blob-${i}`} style={{ background: c }} />
-        ))}
+    <div className={`fs fs-style-${fsStyle}`} onDoubleClick={onClose}>
+      <div className="fs-bg" aria-hidden>
+        {fsStyle !== 'minimal' &&
+          colors.map((c, i) => (
+            <div key={i} className={`fs-blob fs-blob-${i}`} style={{ background: c }} />
+          ))}
+        {fsStyle === 'aurora' && <div className="fs-sheen" />}
+        {fsStyle === 'pulse' && playing && (
+          <div className="fs-pulse" style={{ background: colors[0] }} />
+        )}
+        {fsStyle === 'minimal' && (
+          <div
+            className="fs-minimal-grad"
+            style={{
+              background: `radial-gradient(ellipse at 50% 30%, ${colors[0]} 0%, transparent 65%)`,
+            }}
+          />
+        )}
       </div>
 
       <button className="fs-close" onClick={onClose} title="Exit fullscreen (Esc)">
@@ -98,10 +116,20 @@ export function FullscreenPlayer({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="fs-progress">
-          <span>{formatSeconds(positionSec)}</span>
-          <div className="fs-bar">
-            <div className="fs-bar-fill" style={{ width: `${progress * 100}%` }} />
-          </div>
+          <span>{formatSeconds(shown)}</span>
+          <input
+            className="fs-seek"
+            type="range"
+            min={0}
+            max={Math.max(durationSec, 1)}
+            step={0.5}
+            value={Math.min(shown, durationSec || shown)}
+            onChange={(e) => setDragSec(Number(e.target.value))}
+            onPointerUp={() => {
+              if (dragSec != null) seekTo(dragSec);
+              setDragSec(null);
+            }}
+          />
           <span>{formatSeconds(durationSec)}</span>
         </div>
 

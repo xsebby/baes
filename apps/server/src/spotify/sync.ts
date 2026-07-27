@@ -151,11 +151,21 @@ export class SpotifySync {
 
     for (const pl of lists) {
       const [existing] = await this.db
-        .select({ snap: playlists.providerSnapshotId })
+        .select({
+          id: playlists.id,
+          snap: playlists.providerSnapshotId,
+          artPath: playlists.artPath,
+        })
         .from(playlists)
         .where(and(eq(playlists.providerId, pl.id), eq(playlists.ownerId, userId)))
         .limit(1);
-      if (existing && existing.snap === pl.snapshot_id) continue; // unchanged
+      if (existing && existing.snap === pl.snapshot_id) {
+        // Unchanged content — but still backfill a missing cover.
+        if (!existing.artPath && pl.images?.[0]?.url) {
+          await this.savePlaylistArt(existing.id, pl.images[0].url).catch(() => {});
+        }
+        continue;
+      }
 
       // Feb 2026 API migration: playlist contents live at /items (the old
       // /tracks endpoint 403s). Spotify-owned editorial playlists still 403

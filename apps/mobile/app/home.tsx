@@ -84,6 +84,7 @@ export default function Library() {
     if (segment === 'albums') {
       return (
         <FlatList
+          key="albums"
           data={albums}
           keyExtractor={(a) => a.id}
           numColumns={2}
@@ -114,6 +115,7 @@ export default function Library() {
     if (segment === 'artists') {
       return (
         <FlatList
+          key="artists"
           data={artists}
           keyExtractor={(a) => a.id}
           refreshControl={refreshControl}
@@ -150,6 +152,7 @@ export default function Library() {
 
     return (
       <FlatList
+        key="songs"
         data={tracks}
         keyExtractor={(t) => t.id}
         refreshControl={refreshControl}

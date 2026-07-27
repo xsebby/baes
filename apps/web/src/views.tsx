@@ -705,7 +705,6 @@ function SpotifySection() {
   );
 }
 
-
 function IngestSection() {
   const { client } = useAuth();
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
@@ -714,7 +713,10 @@ function IngestSection() {
   const [jobs, setJobs] = useState<ImportJob[]>([]);
 
   const refreshJobs = useCallback(() => {
-    client.listImportJobs().then((r) => setJobs(r.jobs)).catch(() => {});
+    client
+      .listImportJobs()
+      .then((r) => setJobs(r.jobs))
+      .catch(() => {});
   }, [client]);
   useEffect(refreshJobs, [refreshJobs]);
 
@@ -797,7 +799,11 @@ function IngestSection() {
           <span
             style={{
               color:
-                j.status === 'done' ? '#7dd87d' : j.status === 'error' ? 'var(--danger)' : 'var(--accent)',
+                j.status === 'done'
+                  ? '#7dd87d'
+                  : j.status === 'error'
+                    ? 'var(--danger)'
+                    : 'var(--accent)',
             }}
           >
             {j.status}

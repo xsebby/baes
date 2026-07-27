@@ -1,7 +1,6 @@
 # baes
 
-Self-hosted music streaming for unreleased tracks and local files, with Spotify library mirroring. See [PRD.md](PRD.md) for the full spec.
-
+Self-hosted music streaming for unreleased tracks and local files, with Spotify library mirroring. 
 ## Layout
 
 - `apps/server` — Fastify API (auth, library, streaming, sync)

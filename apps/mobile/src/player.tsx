@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import type { Track } from '@baes/core';
 import { useAuth } from './auth';
+import { useDownloads } from './downloads';
 
 interface PlayerState {
   current: Track | null;
@@ -21,6 +22,7 @@ const PlayerContext = createContext<PlayerState | null>(null);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const { client } = useAuth();
+  const { localUri } = useDownloads();
   const [current, setCurrent] = useState<Track | null>(null);
   const [queue, setQueue] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
@@ -42,16 +44,24 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       if (newQueue) setQueue(newQueue);
       setLoading(true);
       void (async () => {
-        // Always fetch a fresh signed URL — the one embedded in a library
-        // listing may have expired while the app sat open.
-        let streamPath = track.streamUrl;
-        try {
-          const fresh = await client.refreshStreamUrl(track.id);
-          streamPath = fresh.url;
-        } catch {
-          // offline or transient failure — try the embedded URL anyway
+        // Downloaded tracks play from disk — instant and fully offline.
+        const local = localUri(track.id);
+        let uri: string;
+        if (local) {
+          uri = local;
+        } else {
+          // Always fetch a fresh signed URL — the one embedded in a library
+          // listing may have expired while the app sat open.
+          let streamPath = track.streamUrl;
+          try {
+            const fresh = await client.refreshStreamUrl(track.id);
+            streamPath = fresh.url;
+          } catch {
+            // offline or transient failure — try the embedded URL anyway
+          }
+          uri = client.mediaUrl(streamPath);
         }
-        player.replace({ uri: client.mediaUrl(streamPath) });
+        player.replace({ uri });
         player.play();
         try {
           player.setActiveForLockScreen(
@@ -70,7 +80,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       })();
     },
-    [client, player],
+    [client, player, localUri],
   );
 
   const toggle = useCallback(() => {

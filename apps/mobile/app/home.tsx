@@ -159,6 +159,15 @@ export default function Library() {
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#444" />
               </Pressable>
+              <Pressable style={styles.artistRow} onPress={() => router.push('/downloads')}>
+                <View style={styles.artistBubble}>
+                  <Ionicons name="arrow-down-circle" size={20} color="#7dd87d" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.artistName}>Downloads</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#444" />
+              </Pressable>
               <Pressable
                 style={styles.artistRow}
                 onPress={() =>

@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import type { Track } from '@baes/core';
 import { useAuth } from '../auth';
+import { useDownloads } from '../downloads';
 import { formatDuration, usePlayer } from '../player';
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
 export function TrackRow({ track, queue, showArt = true, showTrackNo = false, trailing }: Props) {
   const { client } = useAuth();
   const { playTrack, current, playing } = usePlayer();
+  const { isDownloaded } = useDownloads();
   const active = current?.id === track.id;
 
   return (
@@ -56,6 +58,7 @@ export function TrackRow({ track, queue, showArt = true, showTrackNo = false, tr
           {track.albumTitle ? ` · ${track.albumTitle}` : ''}
         </Text>
       </View>
+      {isDownloaded(track.id) && <Ionicons name="arrow-down-circle" size={14} color="#7dd87d" />}
       <Text style={styles.duration}>{formatDuration(track.durationMs)}</Text>
       {trailing}
     </Pressable>

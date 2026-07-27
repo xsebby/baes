@@ -5,6 +5,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { PlaylistDetail } from '@baes/core';
 import { useAuth } from '../../src/auth';
+import { useDownloads } from '../../src/downloads';
 import { usePlayer } from '../../src/player';
 import { NowPlayingBar } from '../../src/components/NowPlayingBar';
 import { TrackRow } from '../../src/components/TrackRow';
@@ -13,6 +14,7 @@ export default function PlaylistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { client } = useAuth();
   const { playTrack } = usePlayer();
+  const { download, isDownloaded, queueLength } = useDownloads();
   const [playlist, setPlaylist] = useState<PlaylistDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,6 +33,7 @@ export default function PlaylistScreen() {
 
   const queue = playlist.items.flatMap((i) => (i.track ? [i.track] : []));
   const isMirror = playlist.source === 'spotify';
+  const allDownloaded = queue.length > 0 && queue.every((t) => isDownloaded(t.id));
 
   async function removeItem(itemId: string) {
     if (!client || !id) return;
@@ -49,10 +52,26 @@ export default function PlaylistScreen() {
             <Text style={styles.title}>{playlist.title}</Text>
             <Text style={styles.meta}>{playlist.items.length} tracks</Text>
             {queue.length > 0 && (
-              <Pressable style={styles.playAll} onPress={() => playTrack(queue[0]!, queue)}>
-                <Ionicons name="play" size={18} color="#000" />
-                <Text style={styles.playAllText}>Play</Text>
-              </Pressable>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Pressable style={styles.playAll} onPress={() => playTrack(queue[0]!, queue)}>
+                  <Ionicons name="play" size={18} color="#000" />
+                  <Text style={styles.playAllText}>Play</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.downloadAll}
+                  onPress={() => download(queue)}
+                  disabled={allDownloaded}
+                >
+                  <Ionicons
+                    name={allDownloaded ? 'arrow-down-circle' : 'arrow-down-circle-outline'}
+                    size={18}
+                    color={allDownloaded ? '#7dd87d' : '#fff'}
+                  />
+                  <Text style={styles.downloadAllText}>
+                    {allDownloaded ? 'Offline' : queueLength > 0 ? `${queueLength}…` : 'Download'}
+                  </Text>
+                </Pressable>
+              </View>
             )}
           </View>
         }
@@ -117,6 +136,18 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   playAllText: { color: '#000', fontWeight: '700', fontSize: 15 },
+  downloadAll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#333',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  downloadAllText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   emptyText: { color: '#666', fontSize: 14, textAlign: 'center', marginTop: 30, padding: 20 },
   error: { color: '#ff6b6b', textAlign: 'center', marginTop: 60 },
   externalRow: {

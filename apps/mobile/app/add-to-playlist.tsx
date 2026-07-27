@@ -12,6 +12,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { PlaylistSummary } from '@baes/core';
 import { useAuth } from '../src/auth';
+import { useDownloads } from '../src/downloads';
 
 export default function AddToPlaylist() {
   const { trackId } = useLocalSearchParams<{ trackId: string }>();
@@ -19,6 +20,19 @@ export default function AddToPlaylist() {
   const [playlists, setPlaylists] = useState<PlaylistSummary[] | null>(null);
   const [liked, setLiked] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
+  const { isDownloaded, download, remove } = useDownloads();
+  const [track, setTrack] = useState<
+    Awaited<ReturnType<NonNullable<typeof client>['listTracks']>>['tracks'][number] | null
+  >(null);
+
+  useEffect(() => {
+    // We only get the id via params; fetch the track snapshot for downloading.
+    if (!client || !trackId) return;
+    client
+      .listTracks({ limit: 500 })
+      .then((r) => setTrack(r.tracks.find((t) => t.id === trackId) ?? null))
+      .catch(() => {});
+  }, [client, trackId]);
 
   const load = useCallback(() => {
     if (!client || !trackId) return;
@@ -78,6 +92,26 @@ export default function AddToPlaylist() {
         />
         <Text style={styles.rowText}>{liked ? 'Liked' : 'Like'}</Text>
       </Pressable>
+
+      {trackId && (
+        <Pressable
+          style={styles.row}
+          onPress={() => {
+            if (isDownloaded(trackId)) remove(trackId);
+            else if (track) download([track]);
+            router.back();
+          }}
+        >
+          <Ionicons
+            name={isDownloaded(trackId) ? 'arrow-down-circle' : 'arrow-down-circle-outline'}
+            size={22}
+            color={isDownloaded(trackId) ? '#7dd87d' : '#fff'}
+          />
+          <Text style={styles.rowText}>
+            {isDownloaded(trackId) ? 'Remove download' : 'Download'}
+          </Text>
+        </Pressable>
+      )}
 
       <Text style={styles.section}>Add to playlist</Text>
       <FlatList

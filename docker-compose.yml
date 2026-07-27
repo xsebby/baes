@@ -26,6 +26,8 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgres://baes:${POSTGRES_PASSWORD}@db:5432/baes
       SERVER_SECRET: ${SERVER_SECRET:?set in .env}
+      PUBLIC_URL: ${PUBLIC_URL:-https://${DOMAIN}}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
       PORT: 4000
     volumes:
       # Music root on the VPS (PRD §5.1). Add more mounts for extra roots.

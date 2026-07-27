@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { albums, artists, likes, playlistItems, playlists, tracks } from '@baes/db';
+import { albums, artists, externalTracks, likes, playlistItems, playlists, tracks } from '@baes/db';
 import type { Database } from '../db.js';
 import type { Config } from '../config.js';
 import { mediaPath } from '../library/signing.js';
@@ -101,27 +101,79 @@ export const playlistRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, c
     if (!playlist) {
       return reply.code(404).send({ error: 'not_found', message: 'Playlist not found' });
     }
-    const items = await db
+    const rawItems = await db
       .select({
         itemId: playlistItems.id,
         sortKey: playlistItems.sortKey,
-        track: trackSelection,
+        trackId: playlistItems.trackId,
+        externalTrackId: playlistItems.externalTrackId,
       })
       .from(playlistItems)
-      .innerJoin(tracks, eq(playlistItems.trackId, tracks.id))
-      .leftJoin(artists, eq(tracks.artistId, artists.id))
-      .leftJoin(albums, eq(tracks.albumId, albums.id))
       .where(and(eq(playlistItems.playlistId, id), isNull(playlistItems.deletedAt)))
       .orderBy(asc(playlistItems.sortKey));
-    return {
-      id: playlist.id,
-      title: playlist.title,
-      source: playlist.source,
-      items: items.map((i) => ({
-        itemId: i.itemId,
-        track: withMediaUrls(i.track),
-      })),
-    };
+
+    // Resolve local tracks (direct items + matched externals) and external metadata.
+    const externalIds = rawItems.map((i) => i.externalTrackId).filter((v): v is string => !!v);
+    const externals = externalIds.length
+      ? await db.select().from(externalTracks).where(inArray(externalTracks.id, externalIds))
+      : [];
+    const externalById = new Map(externals.map((e) => [e.id, e]));
+
+    const localIds = new Set<string>();
+    for (const i of rawItems) if (i.trackId) localIds.add(i.trackId);
+    for (const e of externals) {
+      if (e.matchedTrackId && e.matchStatus !== 'rejected') localIds.add(e.matchedTrackId);
+    }
+    const locals = localIds.size
+      ? await db
+          .select(trackSelection)
+          .from(tracks)
+          .leftJoin(artists, eq(tracks.artistId, artists.id))
+          .leftJoin(albums, eq(tracks.albumId, albums.id))
+          .where(and(inArray(tracks.id, [...localIds]), isNull(tracks.deletedAt)))
+      : [];
+    const localById = new Map(locals.map((t) => [t.id, t]));
+
+    interface ItemOut {
+      itemId: string;
+      track: ReturnType<typeof withMediaUrls> | null;
+      external: {
+        spotifyId: string;
+        title: string;
+        artist: string;
+        album: string | null;
+        durationMs: number | null;
+        artUrl: string | null;
+        matched: boolean;
+      } | null;
+    }
+    const items = rawItems.flatMap((i): ItemOut[] => {
+      if (i.trackId) {
+        const t = localById.get(i.trackId);
+        return t ? [{ itemId: i.itemId, track: withMediaUrls(t), external: null }] : [];
+      }
+      const e = i.externalTrackId ? externalById.get(i.externalTrackId) : undefined;
+      if (!e) return [];
+      const matched =
+        e.matchedTrackId && e.matchStatus !== 'rejected' ? localById.get(e.matchedTrackId) : null;
+      return [
+        {
+          itemId: i.itemId,
+          track: matched ? withMediaUrls(matched) : null,
+          external: {
+            spotifyId: e.providerId,
+            title: e.title,
+            artist: e.artist,
+            album: e.album,
+            durationMs: e.durationMs,
+            artUrl: e.artUrl,
+            matched: Boolean(matched),
+          },
+        },
+      ];
+    });
+
+    return { id: playlist.id, title: playlist.title, source: playlist.source, items };
   });
 
   app.delete('/api/playlists/:id', { preHandler: app.requireAuth }, async (req, reply) => {

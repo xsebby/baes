@@ -11,7 +11,10 @@ import { authRoutes } from './routes/auth.js';
 import { adminRoutes } from './routes/admin.js';
 import { libraryRoutes } from './routes/library.js';
 import { playlistRoutes } from './routes/playlists.js';
+import { spotifyRoutes } from './routes/spotify.js';
 import { streamRoutes } from './routes/stream.js';
+import { SpotifySync } from './spotify/sync.js';
+import { users } from '@baes/db';
 
 export const APP_VERSION = '0.1.0';
 
@@ -40,6 +43,22 @@ export async function buildApp(config: Config) {
   await app.register(libraryRoutes, { db, config });
   await app.register(playlistRoutes, { db, config });
   await app.register(streamRoutes, { db, config });
+
+  const spotifySync = new SpotifySync(db, config);
+  await app.register(spotifyRoutes, { db, config, sync: spotifySync });
+
+  // Hourly mirror refresh for the owner account (single-user server).
+  if (config.SPOTIFY_CLIENT_ID && config.NODE_ENV !== 'test') {
+    const interval = setInterval(
+      async () => {
+        const [owner] = await db.select({ id: users.id }).from(users).limit(1);
+        if (owner) spotifySync.start(owner.id);
+      },
+      config.SPOTIFY_SYNC_INTERVAL_MINUTES * 60 * 1000,
+    );
+    interval.unref();
+    app.addHook('onClose', async () => clearInterval(interval));
+  }
 
   // Serve the built web client (SPA) when present; API keeps /api/*.
   const webDist = path.resolve(config.WEB_DIST);

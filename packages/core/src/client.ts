@@ -14,6 +14,7 @@ import type {
   PlaylistSummary,
   RedeemInviteRequest,
   ScanStatus,
+  SpotifyStatus,
   Track,
   User,
 } from './types.js';
@@ -168,6 +169,24 @@ export class ApiClient {
 
   removeFromPlaylist(playlistId: string, itemId: string): Promise<void> {
     return this.request('DELETE', `/api/playlists/${playlistId}/items/${itemId}`);
+  }
+
+  // ---- Spotify ----
+
+  spotifyStatus(): Promise<SpotifyStatus> {
+    return this.request('GET', '/api/spotify/status');
+  }
+
+  spotifyAuthStart(): Promise<{ url: string }> {
+    return this.request('POST', '/api/spotify/auth-start');
+  }
+
+  spotifySyncNow(): Promise<void> {
+    return this.request('POST', '/api/spotify/sync');
+  }
+
+  spotifyDisconnect(): Promise<void> {
+    return this.request('DELETE', '/api/spotify/link');
   }
 
   listLikedTracks(): Promise<{ tracks: Track[] }> {

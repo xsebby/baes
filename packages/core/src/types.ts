@@ -117,9 +117,22 @@ export interface PlaylistSummary {
   trackCount: number;
 }
 
+export interface ExternalTrackMeta {
+  spotifyId: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  durationMs: number | null;
+  artUrl: string | null;
+  matched: boolean;
+}
+
 export interface PlaylistItem {
   itemId: string;
-  track: Track;
+  /** Playable local track — present for local items and matched Spotify items. */
+  track: Track | null;
+  /** Spotify metadata — present for mirrored items. */
+  external: ExternalTrackMeta | null;
 }
 
 export interface PlaylistDetail {
@@ -127,4 +140,18 @@ export interface PlaylistDetail {
   title: string;
   source: 'local' | 'spotify';
   items: PlaylistItem[];
+}
+
+export interface SpotifyStatus {
+  configured: boolean;
+  connected: boolean;
+  lastSyncAt: string | null;
+  sync: {
+    running: boolean;
+    lastSyncAt: string | null;
+    lastError: string | null;
+    playlists: number;
+    tracks: number;
+    matched: number;
+  };
 }

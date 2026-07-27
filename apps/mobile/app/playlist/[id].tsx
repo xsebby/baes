@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { PlaylistDetail } from '@baes/core';
@@ -28,7 +29,8 @@ export default function PlaylistScreen() {
   if (error) return <Text style={styles.error}>{error}</Text>;
   if (!playlist) return <ActivityIndicator color="#fff" style={{ marginTop: 60 }} />;
 
-  const queue = playlist.items.map((i) => i.track);
+  const queue = playlist.items.flatMap((i) => (i.track ? [i.track] : []));
+  const isMirror = playlist.source === 'spotify';
 
   async function removeItem(itemId: string) {
     if (!client || !id) return;
@@ -57,17 +59,41 @@ export default function PlaylistScreen() {
         ListEmptyComponent={
           <Text style={styles.emptyText}>Long-press any track in your library to add it here.</Text>
         }
-        renderItem={({ item }) => (
-          <TrackRow
-            track={item.track}
-            queue={queue}
-            trailing={
-              <Pressable onPress={() => removeItem(item.itemId)} hitSlop={10}>
-                <Ionicons name="close-circle-outline" size={20} color="#666" />
-              </Pressable>
-            }
-          />
-        )}
+        renderItem={({ item }) =>
+          item.track ? (
+            <TrackRow
+              track={item.track}
+              queue={queue}
+              trailing={
+                isMirror ? undefined : (
+                  <Pressable onPress={() => removeItem(item.itemId)} hitSlop={10}>
+                    <Ionicons name="close-circle-outline" size={20} color="#666" />
+                  </Pressable>
+                )
+              }
+            />
+          ) : item.external ? (
+            <Pressable
+              style={styles.externalRow}
+              onPress={() =>
+                Linking.openURL(`https://open.spotify.com/track/${item.external!.spotifyId}`)
+              }
+            >
+              <View style={styles.externalArt}>
+                <Ionicons name="musical-note" size={16} color="#555" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.externalTitle} numberOfLines={1}>
+                  {item.external.title}
+                </Text>
+                <Text style={styles.externalSub} numberOfLines={1}>
+                  {item.external.artist} · via Spotify
+                </Text>
+              </View>
+              <Ionicons name="open-outline" size={16} color="#555" />
+            </Pressable>
+          ) : null
+        }
       />
       <NowPlayingBar />
     </View>
@@ -93,4 +119,22 @@ const styles = StyleSheet.create({
   playAllText: { color: '#000', fontWeight: '700', fontSize: 15 },
   emptyText: { color: '#666', fontSize: 14, textAlign: 'center', marginTop: 30, padding: 20 },
   error: { color: '#ff6b6b', textAlign: 'center', marginTop: 60 },
+  externalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 12,
+    opacity: 0.55,
+  },
+  externalArt: {
+    width: 44,
+    height: 44,
+    borderRadius: 6,
+    backgroundColor: '#17171d',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  externalTitle: { color: '#fff', fontSize: 15, fontWeight: '500' },
+  externalSub: { color: '#888', fontSize: 13, marginTop: 2 },
 });

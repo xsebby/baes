@@ -26,7 +26,7 @@ function Main() {
     <>
       <div className="topbar">
         <span className="logo" onClick={() => setView({ type: 'library' })}>
-          baes
+          bæs
         </span>
         {view.type === 'library' ? (
           <input

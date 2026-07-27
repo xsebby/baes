@@ -42,7 +42,7 @@ export default function Login() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.card}>
-        <Text style={styles.logo}>baes</Text>
+        <Text style={styles.logo}>bæs</Text>
         <Text style={styles.subtitle}>
           {firstRun ? 'Create the owner account' : 'Sign in to your server'}
         </Text>

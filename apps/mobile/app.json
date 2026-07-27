@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "baes",
+    "name": "bæs",
     "slug": "baes",
     "scheme": "baes",
     "version": "0.1.0",
@@ -33,7 +33,12 @@
       "expo-router",
       "expo-secure-store",
       "expo-status-bar",
-      ["expo-audio", { "enableBackgroundPlayback": true }]
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true
+        }
+      ]
     ]
   }
 }

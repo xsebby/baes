@@ -15,6 +15,11 @@ const envSchema = z.object({
   DATA_DIR: z.string().default('.data'),
   // Built web client directory; served at / when it exists.
   WEB_DIST: z.string().default('public'),
+  // Spotify integration (optional until set). Register the redirect URI
+  // https://<domain>/spotify/callback in the Spotify developer dashboard.
+  SPOTIFY_CLIENT_ID: z.string().optional(),
+  PUBLIC_URL: z.string().optional(),
+  SPOTIFY_SYNC_INTERVAL_MINUTES: z.coerce.number().default(60),
   // Lifetime of signed stream/art URLs. Must comfortably outlast the longest
   // track — AVPlayer keeps range-requesting the same URL for the whole play.
   MEDIA_URL_TTL_SECONDS: z.coerce.number().default(3600),

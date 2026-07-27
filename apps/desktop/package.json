@@ -1,0 +1,36 @@
+{
+  "name": "@baes/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "bæs desktop app",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac",
+    "build": "echo 'desktop built on demand via pnpm dist' && exit 0",
+    "typecheck": "echo 'no ts' && exit 0",
+    "test": "echo 'no tests' && exit 0"
+  },
+  "devDependencies": {
+    "electron": "^37.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "app.baes.desktop",
+    "productName": "bæs",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.cjs",
+      "icon.png"
+    ],
+    "mac": {
+      "category": "public.app-category.music",
+      "icon": "icon.png",
+      "target": [
+        "dir"
+      ]
+    }
+  }
+}

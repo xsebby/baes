@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
+  SpotifyStatus,
   AlbumDetail,
   AlbumSummary,
   ArtistDetail,
@@ -10,7 +11,7 @@ import type {
   ScanStatus,
   Track,
 } from '@baes/core';
-import { useAuth } from './state';
+import { formatDuration, useAuth } from './state';
 import { usePlayer } from './player';
 import { TrackRow } from './components';
 
@@ -53,7 +54,7 @@ export function Login() {
   return (
     <div className="login">
       <form className="login-card" onSubmit={submit}>
-        <h1>baes</h1>
+        <h1>bæs</h1>
         <p>{setup ? 'Create the owner account' : 'Sign in to your library'}</p>
         <input
           placeholder="Username"
@@ -349,7 +350,8 @@ export function PlaylistView({ id, navigate, onAddToPlaylist }: ViewProps & { id
   useEffect(load, [load]);
 
   if (!playlist) return <div className="empty">Loading…</div>;
-  const queue = playlist.items.map((i) => i.track);
+  const queue = playlist.items.flatMap((i) => (i.track ? [i.track] : []));
+  const isMirror = playlist.source === 'spotify';
 
   return (
     <DetailShell navigate={navigate}>
@@ -373,27 +375,54 @@ export function PlaylistView({ id, navigate, onAddToPlaylist }: ViewProps & { id
           </div>
         </div>
       </div>
-      {playlist.items.map((item) => (
-        <TrackRow
-          key={item.itemId}
-          track={item.track}
-          queue={queue}
-          onAddToPlaylist={onAddToPlaylist}
-          trailing={
-            <button
-              className="rowbtn"
-              title="Remove from playlist"
-              onClick={async (e) => {
-                e.stopPropagation();
-                await client.removeFromPlaylist(playlist.id, item.itemId);
-                load();
-              }}
-            >
-              ✕
-            </button>
-          }
-        />
-      ))}
+      {playlist.items.map((item) =>
+        item.track ? (
+          <TrackRow
+            key={item.itemId}
+            track={item.track}
+            queue={queue}
+            onAddToPlaylist={onAddToPlaylist}
+            trailing={
+              isMirror ? undefined : (
+                <button
+                  className="rowbtn"
+                  title="Remove from playlist"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await client.removeFromPlaylist(playlist.id, item.itemId);
+                    load();
+                  }}
+                >
+                  ✕
+                </button>
+              )
+            }
+          />
+        ) : item.external ? (
+          <a
+            key={item.itemId}
+            className="track-row"
+            style={{ opacity: 0.55, textDecoration: 'none', color: 'inherit' }}
+            href={`https://open.spotify.com/track/${item.external.spotifyId}`}
+            target="_blank"
+            rel="noreferrer"
+            title="Not in your library — opens in Spotify"
+          >
+            {item.external.artUrl ? (
+              <img className="art" src={item.external.artUrl} alt="" />
+            ) : (
+              <div className="art">♪</div>
+            )}
+            <div className="meta">
+              <div className="title">{item.external.title}</div>
+              <div className="sub">{item.external.artist} · via Spotify ↗</div>
+            </div>
+            <div className="dur">
+              {item.external.durationMs ? formatDuration(item.external.durationMs) : ''}
+            </div>
+          </a>
+        ) : null,
+      )}
     </DetailShell>
   );
 }
@@ -554,11 +583,92 @@ export function AdminView({ navigate }: { navigate: (v: View) => void }) {
         </div>
       )}
 
+      <SpotifySection />
+
       <div style={{ padding: '30px 8px' }}>
         <button style={{ color: 'var(--danger)' }} onClick={() => void signOut()}>
           Sign out
         </button>
       </div>
     </DetailShell>
+  );
+}
+
+function SpotifySection() {
+  const { client } = useAuth();
+  const [status, setStatus] = useState<SpotifyStatus | null>(null);
+
+  const refresh = useCallback(() => {
+    client
+      .spotifyStatus()
+      .then(setStatus)
+      .catch(() => {});
+  }, [client]);
+  useEffect(refresh, [refresh]);
+
+  useEffect(() => {
+    if (!status?.sync.running) return;
+    const t = setInterval(refresh, 2000);
+    return () => clearInterval(t);
+  }, [status?.sync.running, refresh]);
+
+  if (!status) return null;
+
+  return (
+    <>
+      <div className="section-title">Spotify</div>
+      {!status.configured ? (
+        <div className="muted small" style={{ padding: '4px 8px' }}>
+          Not configured — set SPOTIFY_CLIENT_ID and PUBLIC_URL on the server.
+        </div>
+      ) : !status.connected ? (
+        <div style={{ padding: '8px' }}>
+          <button
+            className="primary"
+            onClick={async () => {
+              const { url } = await client.spotifyAuthStart();
+              window.location.href = url;
+            }}
+          >
+            Connect Spotify
+          </button>
+        </div>
+      ) : (
+        <div style={{ padding: '4px 8px' }}>
+          <div className="muted small">
+            Connected ·{' '}
+            {status.sync.running
+              ? `syncing… ${status.sync.tracks} tracks (${status.sync.matched} matched)`
+              : status.lastSyncAt
+                ? `last sync ${new Date(status.lastSyncAt).toLocaleString()} — ${status.sync.matched} matched to your library`
+                : 'never synced'}
+            {status.sync.lastError ? ` — error: ${status.sync.lastError}` : ''}
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+            <button
+              className="primary"
+              disabled={status.sync.running}
+              onClick={async () => {
+                await client.spotifySyncNow().catch(() => {});
+                refresh();
+              }}
+            >
+              Sync now
+            </button>
+            <button
+              className="iconbtn"
+              onClick={async () => {
+                if (confirm('Disconnect Spotify?')) {
+                  await client.spotifyDisconnect();
+                  refresh();
+                }
+              }}
+            >
+              Disconnect
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

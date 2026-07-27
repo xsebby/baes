@@ -43,7 +43,9 @@ export class ApiClient {
   constructor(opts: ApiClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/+$/, '');
     this.getToken = opts.getToken ?? (() => null);
-    this.fetchImpl = opts.fetchImpl ?? fetch;
+    // Wrap rather than store bare `fetch` — browsers throw "Illegal invocation"
+    // when fetch is called detached from its global.
+    this.fetchImpl = opts.fetchImpl ?? ((...args) => fetch(...args));
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {

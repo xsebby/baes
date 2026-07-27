@@ -329,6 +329,25 @@ export function EditTrackModal({
           <button className="iconbtn" onClick={onClose}>
             Cancel
           </button>
+          <button
+            className="iconbtn"
+            style={{ marginLeft: 'auto', color: 'var(--danger)' }}
+            disabled={busy}
+            onClick={async () => {
+              if (!confirm(`Delete “${track.title}” from the library?`)) return;
+              setBusy(true);
+              try {
+                const res = await client.deleteTrack(track.id);
+                if (res.note) alert(res.note);
+                onSaved();
+                onClose();
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Delete
+          </button>
         </div>
       </div>
     </div>

@@ -235,6 +235,10 @@ export class ApiClient {
     return this.request('PATCH', `/api/tracks/${id}`, patch);
   }
 
+  deleteTrack(id: string): Promise<{ deletedFile: boolean; note: string | null }> {
+    return this.request('DELETE', `/api/tracks/${id}`);
+  }
+
   importUrl(url: string): Promise<{ job: ImportJob }> {
     return this.request('POST', '/api/import-url', { url });
   }

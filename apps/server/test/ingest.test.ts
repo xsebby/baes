@@ -122,6 +122,52 @@ describe('track editing', () => {
   });
 });
 
+describe('duplicates & delete', () => {
+  it('skips re-uploads of identical bytes and deletes managed uploads', async () => {
+    const boundary = '----baesdupe';
+    const wav = makeWav(0.2); // identical bytes to the earlier upload
+    const part = (name: string) =>
+      Buffer.concat([
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${name}"\r\nContent-Type: audio/wav\r\n\r\n`,
+        ),
+        wav,
+        Buffer.from('\r\n'),
+      ]);
+    const body = Buffer.concat([part('Dupe - Copy.wav'), Buffer.from(`--${boundary}--\r\n`)]);
+    await app.inject({
+      method: 'POST',
+      url: '/api/upload',
+      headers: { ...auth(), 'content-type': `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+    await waitForScan();
+    const status = await app.inject({
+      method: 'GET',
+      url: '/api/admin/scan/status',
+      headers: auth(),
+    });
+    expect(status.json().duplicates).toBe(1);
+
+    // The original uploaded track can be deleted (managed root → file removed)
+    const list = await app.inject({
+      method: 'GET',
+      url: '/api/tracks?q=fresh%20cut',
+      headers: auth(),
+    });
+    const id = list.json().tracks[0].id;
+    const del = await app.inject({ method: 'DELETE', url: `/api/tracks/${id}`, headers: auth() });
+    expect(del.statusCode).toBe(200);
+    expect(del.json().deletedFile).toBe(true);
+    const after = await app.inject({
+      method: 'GET',
+      url: '/api/tracks?q=fresh%20cut',
+      headers: auth(),
+    });
+    expect(after.json().tracks).toHaveLength(0);
+  });
+});
+
 describe('url import', () => {
   it('records a job (errors gracefully without yt-dlp or network)', async () => {
     const res = await app.inject({

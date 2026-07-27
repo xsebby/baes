@@ -480,3 +480,15 @@ input {
   color: var(--muted);
   padding: 60px 0;
 }
+
+/* ---- desktop (Electron) chrome ---- */
+.electron .topbar {
+  padding-top: 16px;
+  padding-left: 88px; /* clear the macOS traffic lights */
+  -webkit-app-region: drag;
+}
+.electron .topbar input,
+.electron .topbar button,
+.electron .topbar .logo {
+  -webkit-app-region: no-drag;
+}

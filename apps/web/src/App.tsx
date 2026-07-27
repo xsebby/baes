@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Track } from '@baes/core';
 import { AuthProvider, useAuth } from './state';
 import { PlayerProvider } from './player';
@@ -16,6 +16,9 @@ import {
 
 function Main() {
   const { user } = useAuth();
+  useEffect(() => {
+    if (navigator.userAgent.includes('Electron')) document.body.classList.add('electron');
+  }, []);
   const [view, setView] = useState<View>({ type: 'library' });
   const [query, setQuery] = useState('');
   const [modalTrack, setModalTrack] = useState<Track | null>(null);

@@ -584,7 +584,7 @@ export function AdminView({ navigate }: { navigate: (v: View) => void }) {
         {scan?.running
           ? `Scanning… ${scan.scanned} files (${scan.added} new, ${scan.updated} updated)`
           : scan?.startedAt
-            ? `Last scan: ${scan.scanned} scanned, ${scan.added} added, ${scan.updated} updated, ${scan.removed} removed${scan.errors.length ? `, ${scan.errors.length} errors` : ''}`
+            ? `Last scan: ${scan.scanned} scanned, ${scan.added} added, ${scan.updated} updated, ${scan.removed} removed${scan.duplicates ? `, ${scan.duplicates} duplicates skipped` : ''}${scan.errors.length ? `, ${scan.errors.length} errors` : ''}`
             : 'No scan yet'}
       </div>
       {scan?.errors.slice(0, 3).map((e, i) => (
@@ -759,13 +759,17 @@ function IngestSection() {
     <>
       <div className="section-title">Upload music</div>
       <div style={{ padding: '4px 8px' }}>
-        <input
-          type="file"
-          accept="audio/*,.mp3,.flac,.wav,.m4a,.aac,.ogg,.opus,.aiff"
-          multiple
-          disabled={busy}
-          onChange={(e) => onFiles(e.target.files)}
-        />
+        <label className="primary" style={{ cursor: 'pointer' }}>
+          {busy ? 'Uploading…' : '⬆ Choose audio files'}
+          <input
+            type="file"
+            accept="audio/*,.mp3,.flac,.wav,.m4a,.aac,.ogg,.opus,.aiff"
+            multiple
+            disabled={busy}
+            style={{ display: 'none' }}
+            onChange={(e) => onFiles(e.target.files)}
+          />
+        </label>
         {uploadMsg && (
           <div className="muted small" style={{ marginTop: 6 }}>
             {uploadMsg}

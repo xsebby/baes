@@ -27,6 +27,8 @@ export interface ScanStatus {
   added: number;
   updated: number;
   removed: number;
+  /** New files skipped because identical bytes already exist in the library. */
+  duplicates: number;
   errors: { file: string; message: string }[];
 }
 
@@ -46,6 +48,7 @@ export class LibraryScanner {
     added: 0,
     updated: 0,
     removed: 0,
+    duplicates: 0,
     errors: [],
   };
 
@@ -69,6 +72,7 @@ export class LibraryScanner {
       added: 0,
       updated: 0,
       removed: 0,
+      duplicates: 0,
       errors: [],
     };
     void this.run()
@@ -142,6 +146,20 @@ export class LibraryScanner {
 
     if (existing && existing.contentHash === contentHash && !existing.deletedAt) {
       return; // unchanged
+    }
+
+    // Brand-new file whose exact bytes already live elsewhere in the library
+    // (e.g. an accidental re-upload) — skip it instead of creating a duplicate.
+    if (!existing) {
+      const [dupe] = await this.db
+        .select({ id: tracks.id })
+        .from(tracks)
+        .where(and(eq(tracks.contentHash, contentHash), isNull(tracks.deletedAt)))
+        .limit(1);
+      if (dupe) {
+        this.status.duplicates++;
+        return;
+      }
     }
 
     let meta: IAudioMetadata | null = null;

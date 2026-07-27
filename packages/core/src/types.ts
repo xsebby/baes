@@ -99,6 +99,7 @@ export interface ScanStatus {
   added: number;
   updated: number;
   removed: number;
+  duplicates?: number;
   errors: { file: string; message: string }[];
 }
 

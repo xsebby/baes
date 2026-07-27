@@ -113,7 +113,10 @@ export class SpotifySync {
         await new Promise((r) => setTimeout(r, wait));
         continue;
       }
-      if (!res.ok) throw new Error(`Spotify API ${path}: ${res.status}`);
+      if (!res.ok) {
+        const body = (await res.text().catch(() => '')).slice(0, 300);
+        throw new Error(`Spotify API ${path}: ${res.status} ${body}`);
+      }
       return (await res.json()) as T;
     }
     throw new Error(`Spotify API ${path}: rate limited`);
@@ -166,6 +169,11 @@ export class SpotifySync {
         });
       } catch (err) {
         this.status.skipped.push(pl.name || pl.id);
+        // Surface the first failure's detail so the admin UI shows the real cause.
+        if (!this.status.lastError) {
+          this.status.lastError = String(err instanceof Error ? err.message : err);
+        }
+        console.error('[spotify] playlist sync failed:', pl.name, err);
       }
     }
 

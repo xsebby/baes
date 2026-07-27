@@ -24,6 +24,20 @@ cd apps/mobile && pnpm start   # Expo dev server
 
 On first run, use "Fresh server? Create owner account" in the app (or `POST /api/auth/setup`) to create the owner.
 
+## Mobile builds (iOS)
+
+From `apps/mobile` on a Mac with Xcode + a paired iPhone:
+
+```bash
+# Dev build — loads JS live from Metro on this machine (hot reload)
+npx expo run:ios --device
+
+# Standalone release — JS bundled into the app, runs with no Mac/Metro
+npx expo run:ios --device --configuration Release
+```
+
+CocoaPods needs a UTF-8 locale; if `pod install` crashes with an encoding error, prefix commands with `LANG=en_US.UTF-8`.
+
 ## Tests
 
 ```bash

@@ -799,7 +799,7 @@ function IngestSection() {
             padding: '10px 12px',
             color: 'var(--text)',
           }}
-          placeholder="https://soundcloud.com/…"
+          placeholder="https://soundcloud.com/… or pillowcase.su/f/…"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && startImport()}

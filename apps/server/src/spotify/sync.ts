@@ -153,18 +153,19 @@ export class SpotifySync {
         .limit(1);
       if (existing && existing.snap === pl.snapshot_id) continue; // unchanged
 
-      // Spotify 403s their own editorial/algorithmic playlists for dev-mode
-      // apps — skip those rather than aborting the whole sync.
+      // Feb 2026 API migration: playlist contents live at /items (the old
+      // /tracks endpoint 403s). Spotify-owned editorial playlists still 403
+      // outright for dev-mode apps — skip those rather than aborting.
       try {
-        const items = await this.fetchAll<{ track: SpotifyTrackObj | null }>(
+        const items = await this.fetchAll<{ item: SpotifyTrackObj | null }>(
           token,
-          `/playlists/${pl.id}/tracks?limit=100`,
+          `/playlists/${pl.id}/items?limit=100`,
         );
         await this.mirrorPlaylist(userId, {
           providerId: pl.id,
           title: pl.name,
           snapshotId: pl.snapshot_id,
-          tracks: items.map((i) => i.track).filter((t): t is SpotifyTrackObj => !!t?.id),
+          tracks: items.map((i) => i.item).filter((t): t is SpotifyTrackObj => !!t?.id),
           candidates,
         });
       } catch (err) {

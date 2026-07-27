@@ -19,6 +19,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -r
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app .
+# Volume mount points must exist and belong to the runtime user before the
+# named volumes are first created, or they materialize root-owned.
+RUN mkdir -p /app/.data /app/transcode-cache && chown -R node:node /app/.data /app/transcode-cache
 EXPOSE 4000
 USER node
 CMD ["node", "dist/index.js"]

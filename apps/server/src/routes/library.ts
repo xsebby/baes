@@ -148,6 +148,26 @@ export const libraryRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, co
     return { artists: rows.filter((r) => r.trackCount > 0) };
   });
 
+  app.get('/api/artists/:id', { preHandler: app.requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const [artist] = await db
+      .select({ id: artists.id, name: artists.name })
+      .from(artists)
+      .where(eq(artists.id, id))
+      .limit(1);
+    if (!artist) {
+      return reply.code(404).send({ error: 'not_found', message: 'Artist not found' });
+    }
+    const artistTracks = await db
+      .select(trackSelection)
+      .from(tracks)
+      .leftJoin(artists, eq(tracks.artistId, artists.id))
+      .leftJoin(albums, eq(tracks.albumId, albums.id))
+      .where(and(eq(tracks.artistId, id), isNull(tracks.deletedAt)))
+      .orderBy(asc(albums.title), asc(tracks.discNo), asc(tracks.trackNo), asc(tracks.title));
+    return { ...artist, tracks: artistTracks.map(withMediaUrls) };
+  });
+
   const playEventSchema = z.object({
     events: z
       .array(

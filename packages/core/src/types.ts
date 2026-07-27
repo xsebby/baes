@@ -78,6 +78,12 @@ export interface ArtistSummary {
   trackCount: number;
 }
 
+export interface ArtistDetail {
+  id: string;
+  name: string;
+  tracks: Track[];
+}
+
 export interface LibraryRoot {
   id: string;
   path: string;

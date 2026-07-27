@@ -11,15 +11,22 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
-import type { Track } from '@baes/core';
+import { Ionicons } from '@expo/vector-icons';
+import type { AlbumSummary, ArtistSummary, Track } from '@baes/core';
 import { useAuth } from '../src/auth';
-import { formatDuration, usePlayer } from '../src/player';
+import { usePlayer } from '../src/player';
 import { NowPlayingBar } from '../src/components/NowPlayingBar';
+import { TrackRow } from '../src/components/TrackRow';
+
+type Segment = 'songs' | 'albums' | 'artists';
 
 export default function Library() {
   const { client, user } = useAuth();
-  const { playTrack, current } = usePlayer();
+  const { current } = usePlayer();
+  const [segment, setSegment] = useState<Segment>('songs');
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [albums, setAlbums] = useState<AlbumSummary[]>([]);
+  const [artists, setArtists] = useState<ArtistSummary[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -31,8 +38,14 @@ export default function Library() {
       if (!client) return;
       setError(null);
       try {
-        const res = await client.listTracks({ q: q || undefined, limit: 500 });
-        setTracks(res.tracks);
+        const [t, al, ar] = await Promise.all([
+          client.listTracks({ q: q || undefined, limit: 500 }),
+          client.listAlbums(),
+          client.listArtists(),
+        ]);
+        setTracks(t.tracks);
+        setAlbums(al.albums);
+        setArtists(ar.artists);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load library');
       } finally {
@@ -53,28 +66,95 @@ export default function Library() {
     searchTimer.current = setTimeout(() => load(text), 250);
   }
 
-  function renderTrack({ item }: { item: Track }) {
-    const active = current?.id === item.id;
-    return (
-      <Pressable style={styles.trackRow} onPress={() => playTrack(item, tracks)}>
-        {item.artUrl && client ? (
-          <Image source={{ uri: client.mediaUrl(item.artUrl) }} style={styles.trackArt} />
-        ) : (
-          <View style={[styles.trackArt, styles.artPlaceholder]}>
-            <Text style={styles.artGlyph}>♪</Text>
-          </View>
-        )}
-        <View style={styles.trackMeta}>
-          <Text style={[styles.trackTitle, active && styles.activeTitle]} numberOfLines={1}>
-            {item.title}
-          </Text>
-          <Text style={styles.trackArtist} numberOfLines={1}>
-            {item.artistName ?? 'Unknown artist'}
-            {item.albumTitle ? ` · ${item.albumTitle}` : ''}
-          </Text>
+  const refreshControl = (
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={() => {
+        setRefreshing(true);
+        load(query);
+      }}
+      tintColor="#fff"
+    />
+  );
+
+  function renderBody() {
+    if (loading) return <ActivityIndicator color="#fff" style={{ marginTop: 40 }} />;
+    if (error) return <Text style={styles.error}>{error}</Text>;
+
+    if (segment === 'albums') {
+      return (
+        <FlatList
+          data={albums}
+          keyExtractor={(a) => a.id}
+          numColumns={2}
+          columnWrapperStyle={styles.albumRow}
+          contentContainerStyle={styles.albumGrid}
+          refreshControl={refreshControl}
+          renderItem={({ item }) => (
+            <Pressable style={styles.albumCard} onPress={() => router.push(`/album/${item.id}`)}>
+              {item.artUrl && client ? (
+                <Image source={{ uri: client.mediaUrl(item.artUrl) }} style={styles.albumArt} />
+              ) : (
+                <View style={[styles.albumArt, styles.artPlaceholder]}>
+                  <Ionicons name="disc" size={40} color="#444" />
+                </View>
+              )}
+              <Text style={styles.albumTitle} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text style={styles.albumMeta} numberOfLines={1}>
+                {item.artistName ?? 'Unknown'} · {item.trackCount}
+              </Text>
+            </Pressable>
+          )}
+        />
+      );
+    }
+
+    if (segment === 'artists') {
+      return (
+        <FlatList
+          data={artists}
+          keyExtractor={(a) => a.id}
+          refreshControl={refreshControl}
+          renderItem={({ item }) => (
+            <Pressable style={styles.artistRow} onPress={() => router.push(`/artist/${item.id}`)}>
+              <View style={styles.artistBubble}>
+                <Ionicons name="person" size={20} color="#666" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.artistName}>{item.name}</Text>
+                <Text style={styles.artistMeta}>
+                  {item.trackCount} track{item.trackCount === 1 ? '' : 's'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#444" />
+            </Pressable>
+          )}
+        />
+      );
+    }
+
+    if (tracks.length === 0) {
+      return (
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>{query ? 'No matches' : 'No music yet'}</Text>
+          {!query && (
+            <Text style={styles.emptyBody}>
+              Add a library root and run a scan from the admin screen.
+            </Text>
+          )}
         </View>
-        <Text style={styles.duration}>{formatDuration(item.durationMs)}</Text>
-      </Pressable>
+      );
+    }
+
+    return (
+      <FlatList
+        data={tracks}
+        keyExtractor={(t) => t.id}
+        refreshControl={refreshControl}
+        renderItem={({ item }) => <TrackRow track={item} queue={tracks} />}
+      />
     );
   }
 
@@ -91,42 +171,26 @@ export default function Library() {
         />
         {user?.role === 'owner' && (
           <Pressable style={styles.adminButton} onPress={() => router.push('/admin')}>
-            <Text style={styles.adminButtonText}>⚙︎</Text>
+            <Ionicons name="settings-outline" size={20} color="#fff" />
           </Pressable>
         )}
       </View>
 
-      {loading ? (
-        <ActivityIndicator color="#fff" style={{ marginTop: 40 }} />
-      ) : error ? (
-        <Text style={styles.error}>{error}</Text>
-      ) : tracks.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>{query ? 'No matches' : 'No music yet'}</Text>
-          {!query && (
-            <Text style={styles.emptyBody}>
-              Add a library root and run a scan from the ⚙︎ admin screen.
+      <View style={styles.segments}>
+        {(['songs', 'albums', 'artists'] as const).map((s) => (
+          <Pressable
+            key={s}
+            style={[styles.segment, segment === s && styles.segmentActive]}
+            onPress={() => setSegment(s)}
+          >
+            <Text style={[styles.segmentText, segment === s && styles.segmentTextActive]}>
+              {s[0]!.toUpperCase() + s.slice(1)}
             </Text>
-          )}
-        </View>
-      ) : (
-        <FlatList
-          data={tracks}
-          keyExtractor={(t) => t.id}
-          renderItem={renderTrack}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                load(query);
-              }}
-              tintColor="#fff"
-            />
-          }
-        />
-      )}
+          </Pressable>
+        ))}
+      </View>
 
+      {renderBody()}
       <NowPlayingBar />
     </View>
   );
@@ -134,7 +198,7 @@ export default function Library() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0b0b0f' },
-  header: { flexDirection: 'row', gap: 8, padding: 12 },
+  header: { flexDirection: 'row', gap: 8, padding: 12, paddingBottom: 8 },
   search: {
     flex: 1,
     backgroundColor: '#17171d',
@@ -147,25 +211,43 @@ const styles = StyleSheet.create({
   adminButton: {
     backgroundColor: '#17171d',
     borderRadius: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     justifyContent: 'center',
   },
-  adminButtonText: { color: '#fff', fontSize: 18 },
-  trackRow: {
+  segments: { flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 8, gap: 8 },
+  segment: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 18,
+    backgroundColor: '#17171d',
+  },
+  segmentActive: { backgroundColor: '#fff' },
+  segmentText: { color: '#999', fontSize: 13, fontWeight: '600' },
+  segmentTextActive: { color: '#000' },
+  albumGrid: { paddingHorizontal: 12, paddingBottom: 12 },
+  albumRow: { gap: 12 },
+  albumCard: { flex: 1, marginBottom: 16, maxWidth: '48%' },
+  albumArt: { width: '100%', aspectRatio: 1, borderRadius: 10 },
+  artPlaceholder: { backgroundColor: '#17171d', alignItems: 'center', justifyContent: 'center' },
+  albumTitle: { color: '#fff', fontSize: 14, fontWeight: '600', marginTop: 8 },
+  albumMeta: { color: '#888', fontSize: 12, marginTop: 2 },
+  artistRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
     gap: 12,
   },
-  trackArt: { width: 44, height: 44, borderRadius: 6 },
-  artPlaceholder: { backgroundColor: '#17171d', alignItems: 'center', justifyContent: 'center' },
-  artGlyph: { color: '#555', fontSize: 18 },
-  trackMeta: { flex: 1 },
-  trackTitle: { color: '#fff', fontSize: 15, fontWeight: '500' },
-  activeTitle: { color: '#8ab4ff' },
-  trackArtist: { color: '#888', fontSize: 13, marginTop: 2 },
-  duration: { color: '#666', fontSize: 13 },
+  artistBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#17171d',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  artistName: { color: '#fff', fontSize: 15, fontWeight: '500' },
+  artistMeta: { color: '#888', fontSize: 13, marginTop: 2 },
   error: { color: '#ff6b6b', textAlign: 'center', marginTop: 40, paddingHorizontal: 24 },
   empty: { alignItems: 'center', marginTop: 60, paddingHorizontal: 32, gap: 8 },
   emptyTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },

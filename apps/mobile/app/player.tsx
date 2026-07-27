@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Slider from '@react-native-community/slider';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '../src/auth';
 import { formatSeconds, usePlayer } from '../src/player';
@@ -25,7 +26,7 @@ export default function NowPlaying() {
         <Image source={{ uri: client.mediaUrl(current.artUrl) }} style={styles.art} />
       ) : (
         <View style={[styles.art, styles.artPlaceholder]}>
-          <Text style={styles.artGlyph}>♪</Text>
+          <Ionicons name="musical-notes" size={84} color="#444" />
         </View>
       )}
 
@@ -66,17 +67,22 @@ export default function NowPlaying() {
 
       <View style={styles.controls}>
         <Pressable onPress={previous} hitSlop={12}>
-          <Text style={styles.skip}>⏮</Text>
+          <Ionicons name="play-skip-back" size={32} color="#fff" />
         </Pressable>
         <Pressable onPress={toggle} style={styles.playButton} hitSlop={12}>
           {loading ? (
             <ActivityIndicator color="#000" />
           ) : (
-            <Text style={styles.playGlyph}>{playing ? '⏸' : '▶'}</Text>
+            <Ionicons
+              name={playing ? 'pause' : 'play'}
+              size={32}
+              color="#000"
+              style={playing ? undefined : styles.playNudge}
+            />
           )}
         </Pressable>
         <Pressable onPress={next} hitSlop={12}>
-          <Text style={styles.skip}>⏭</Text>
+          <Ionicons name="play-skip-forward" size={32} color="#fff" />
         </Pressable>
       </View>
     </View>
@@ -94,7 +100,7 @@ const styles = StyleSheet.create({
   },
   art: { width: 320, height: 320, borderRadius: 16, maxWidth: '90%' },
   artPlaceholder: { backgroundColor: '#17171d', alignItems: 'center', justifyContent: 'center' },
-  artGlyph: { color: '#444', fontSize: 84 },
+  playNudge: { marginLeft: 4 },
   meta: { alignItems: 'center', gap: 6, paddingHorizontal: 12 },
   title: { color: '#fff', fontSize: 22, fontWeight: '800', textAlign: 'center' },
   artist: { color: '#999', fontSize: 15 },

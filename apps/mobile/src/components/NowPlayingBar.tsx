@@ -1,4 +1,5 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '../auth';
 import { usePlayer } from '../player';
@@ -18,7 +19,7 @@ export function NowPlayingBar() {
           <Image source={{ uri: client.mediaUrl(current.artUrl) }} style={styles.art} />
         ) : (
           <View style={[styles.art, styles.artPlaceholder]}>
-            <Text style={styles.artGlyph}>♪</Text>
+            <Ionicons name="musical-note" size={16} color="#666" />
           </View>
         )}
         <View style={styles.meta}>
@@ -37,7 +38,7 @@ export function NowPlayingBar() {
           style={styles.button}
           hitSlop={8}
         >
-          <Text style={styles.buttonText}>{playing ? '⏸' : '▶'}</Text>
+          <Ionicons name={playing ? 'pause' : 'play'} size={24} color="#fff" />
         </Pressable>
         <Pressable
           onPress={(e) => {
@@ -47,7 +48,7 @@ export function NowPlayingBar() {
           style={styles.button}
           hitSlop={8}
         >
-          <Text style={styles.buttonText}>⏭</Text>
+          <Ionicons name="play-skip-forward" size={22} color="#fff" />
         </Pressable>
       </View>
     </Pressable>

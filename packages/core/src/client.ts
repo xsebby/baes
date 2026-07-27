@@ -2,6 +2,7 @@ import type {
   AlbumDetail,
   AlbumSummary,
   ApiErrorBody,
+  ArtistDetail,
   ArtistSummary,
   CreateInviteResponse,
   HealthResponse,
@@ -120,6 +121,10 @@ export class ApiClient {
 
   listArtists(): Promise<{ artists: ArtistSummary[] }> {
     return this.request('GET', '/api/artists');
+  }
+
+  getArtist(id: string): Promise<ArtistDetail> {
+    return this.request('GET', `/api/artists/${id}`);
   }
 
   refreshStreamUrl(trackId: string): Promise<{ url: string; expiresAt: string }> {

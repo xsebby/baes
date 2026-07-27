@@ -145,6 +145,25 @@ describe('library scan', () => {
     const res = await app.inject({ method: 'GET', url: '/api/tracks' });
     expect(res.statusCode).toBe(401);
   });
+
+  it('returns artist detail with their tracks', async () => {
+    const list = await app.inject({
+      method: 'GET',
+      url: '/api/artists',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const artist = list.json().artists.find((a: any) => a.name === 'Artist One');
+    expect(artist).toBeTruthy();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/artists/${artist.id}`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().name).toBe('Artist One');
+    expect(res.json().tracks.length).toBeGreaterThanOrEqual(2);
+  });
 });
 
 describe('streaming', () => {

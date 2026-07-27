@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+**/dist
+apps/mobile/ios
+apps/mobile/android
+apps/mobile/.expo
+.pglite
+**/.pglite
+.data
+**/.data
+.git
+.github
+*.log
+.env

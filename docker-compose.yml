@@ -28,8 +28,9 @@ services:
       SERVER_SECRET: ${SERVER_SECRET:?set in .env}
       PORT: 4000
     volumes:
-      # Music roots: mount host dirs at identical container paths (PRD §5.1).
-      # - /srv/music/unreleased:/srv/music/unreleased:ro
+      # Music root on the VPS (PRD §5.1). Add more mounts for extra roots.
+      - ${MUSIC_DIR:-/srv/music}:/srv/music:ro
+      - app-data:/app/.data
       - transcode-cache:/app/transcode-cache
 
   caddy:
@@ -49,6 +50,7 @@ services:
 
 volumes:
   pgdata:
+  app-data:
   transcode-cache:
   caddy-data:
   caddy-config:

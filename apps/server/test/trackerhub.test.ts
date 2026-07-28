@@ -9,7 +9,9 @@ describe('TrackerHub import', () => {
   it('turns Google Sheets and ArtistGrid links into their CSV export endpoint', () => {
     const id = '1ivoRJskby8zykhH_szifY4a1HIQCTnVh6c2WfIfMbkM';
     expect(
-      trackerhubCsvUrl(`https://docs.google.com/spreadsheets/d/${id}/edit?gid=1962169030#gid=1962169030`),
+      trackerhubCsvUrl(
+        `https://docs.google.com/spreadsheets/d/${id}/edit?gid=1962169030#gid=1962169030`,
+      ),
     ).toBe(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=1962169030`);
     expect(trackerhubCsvUrl(`https://artistgrid.cx/sh/${id}/recent?artist=Playboi%20Carti`)).toBe(
       `https://docs.google.com/spreadsheets/d/${id}/export?format=csv`,
@@ -17,10 +19,11 @@ describe('TrackerHub import', () => {
   });
 
   it('extracts unique media links from a public tracker export', async () => {
-    const mockedFetch = vi.fn(async () =>
-      new Response(
-        'Title,Link\nSong,https://pillows.su/f/abc123def456\nAgain,https://pillows.su/f/abc123def456\nOther,https://example.com/file.mp3',
-      ),
+    const mockedFetch = vi.fn(
+      async () =>
+        new Response(
+          'Title,Link\nSong,https://pillows.su/f/abc123def456\nAgain,https://pillows.su/f/abc123def456\nOther,https://example.com/file.mp3',
+        ),
     );
     vi.stubGlobal('fetch', mockedFetch);
 

@@ -105,6 +105,18 @@ export function LibraryView({
   const [editTrack, setEditTrack] = useState<Track | null>(null);
   const [newPlaylistOpen, setNewPlaylistOpen] = useState(false);
   const [newPlaylistTitle, setNewPlaylistTitle] = useState('');
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(
@@ -144,6 +156,18 @@ export function LibraryView({
             {s[0]!.toUpperCase() + s.slice(1)}
           </button>
         ))}
+        {segment === 'songs' && tracks.length > 0 && (
+          <button
+            className={`segment${selectMode ? ' active' : ''}`}
+            style={{ marginLeft: 'auto' }}
+            onClick={() => {
+              setSelectMode((v) => !v);
+              setSelected(new Set());
+            }}
+          >
+            {selectMode ? 'Done' : 'Select'}
+          </button>
+        )}
       </div>
       <div className="content">
         {loading ? (
@@ -152,15 +176,32 @@ export function LibraryView({
           tracks.length === 0 ? (
             <div className="empty">{query ? 'No matches' : 'No music yet — scan in Admin'}</div>
           ) : (
-            tracks.map((t) => (
-              <TrackRow
-                key={t.id}
-                track={t}
-                queue={tracks}
-                onAddToPlaylist={onAddToPlaylist}
-                onEdit={setEditTrack}
-              />
-            ))
+            tracks.map((t) =>
+              selectMode ? (
+                <div
+                  key={t.id}
+                  className={`track-row selectable${selected.has(t.id) ? ' selected' : ''}`}
+                  onClick={() => toggleSelected(t.id)}
+                >
+                  <div className={`checkbox${selected.has(t.id) ? ' checked' : ''}`}>
+                    {selected.has(t.id) ? '✓' : ''}
+                  </div>
+                  <div className="meta">
+                    <div className="title">{t.title}</div>
+                    <div className="sub">{t.artistName ?? 'Unknown artist'}</div>
+                  </div>
+                  <div className="dur">{formatDuration(t.durationMs)}</div>
+                </div>
+              ) : (
+                <TrackRow
+                  key={t.id}
+                  track={t}
+                  queue={tracks}
+                  onAddToPlaylist={onAddToPlaylist}
+                  onEdit={setEditTrack}
+                />
+              ),
+            )
           )
         ) : segment === 'albums' ? (
           <div className="album-grid">
@@ -233,6 +274,44 @@ export function LibraryView({
           </>
         )}
       </div>
+      {selectMode && selected.size > 0 && (
+        <div className="select-bar">
+          <span>
+            {selected.size} selected
+            {deleting ? ' — deleting…' : ''}
+          </span>
+          <button className="iconbtn" onClick={() => setSelected(new Set(tracks.map((t) => t.id)))}>
+            All
+          </button>
+          <button
+            className="primary danger"
+            disabled={deleting}
+            onClick={async () => {
+              if (!confirm(`Delete ${selected.size} track(s) from the library?`)) return;
+              setDeleting(true);
+              try {
+                let externalNote = false;
+                for (const id of selected) {
+                  const res = await client.deleteTrack(id).catch(() => null);
+                  if (res && !res.deletedFile) externalNote = true;
+                }
+                if (externalNote) {
+                  alert(
+                    'Some tracks live in your own music folders — they were removed from the library, but the files remain and a future rescan will re-add them unless you delete the files at the source.',
+                  );
+                }
+                setSelected(new Set());
+                setSelectMode(false);
+                void load(query);
+              } finally {
+                setDeleting(false);
+              }
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      )}
       {editTrack && (
         <EditTrackModal
           track={editTrack}

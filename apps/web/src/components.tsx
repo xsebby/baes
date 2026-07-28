@@ -277,8 +277,9 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
           </button>
           {showSpeed && (
             <div className="speed-pop">
-              <div className="muted small" style={{ marginBottom: 6 }}>
-                Speed {rate.toFixed(2)}×
+              <div className="sp-head">
+                <span className="muted small">Playback speed</span>
+                <span className="sp-value">{rate.toFixed(2)}×</span>
               </div>
               <input
                 type="range"
@@ -300,14 +301,20 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
                   </button>
                 ))}
               </div>
-              <label className="small" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  type="checkbox"
-                  checked={!preservePitch}
-                  onChange={(e) => setPreservePitch(!e.target.checked)}
-                />
-                Shift pitch with speed (slowed / sped-up)
-              </label>
+              <div className="sp-mode">
+                <button
+                  className={`opt${preservePitch ? ' active' : ''}`}
+                  onClick={() => setPreservePitch(true)}
+                >
+                  Keep pitch
+                </button>
+                <button
+                  className={`opt${!preservePitch ? ' active' : ''}`}
+                  onClick={() => setPreservePitch(false)}
+                >
+                  Slowed / sped
+                </button>
+              </div>
             </div>
           )}
         </div>

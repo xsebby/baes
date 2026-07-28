@@ -44,6 +44,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   );
   const [rate, setRateState] = useState(1);
   const [preservePitch, setPreservePitchState] = useState(true);
+  const rateRef = useRef(1);
+  const preservePitchRef = useRef(true);
 
   // Refs so MediaSession/ended handlers see fresh values without re-binding.
   const currentRef = useRef(current);
@@ -100,6 +102,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onEnded = () => skipTo(1);
+    // Browsers reset playbackRate on new sources and Safari defers changes made
+    // while paused — re-assert our settings whenever the element (re)activates.
+    const reassert = () => {
+      audio.playbackRate = rateRef.current;
+      audio.preservesPitch = preservePitchRef.current;
+    };
+    audio.addEventListener('loadedmetadata', reassert);
+    audio.addEventListener('play', reassert);
     audio.addEventListener('timeupdate', onTime);
     audio.addEventListener('durationchange', onDur);
     audio.addEventListener('play', onPlay);
@@ -111,6 +121,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audio.removeEventListener('play', onPlay);
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('loadedmetadata', reassert);
+      audio.removeEventListener('play', reassert);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skipTo]);
@@ -145,11 +157,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setRate = useCallback((r: number) => {
+    rateRef.current = r;
     audioRef.current.playbackRate = r;
     setRateState(r);
   }, []);
 
   const setPreservePitch = useCallback((b: boolean) => {
+    preservePitchRef.current = b;
     audioRef.current.preservesPitch = b;
     setPreservePitchState(b);
   }, []);

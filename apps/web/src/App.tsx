@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import type { Track } from '@baes/core';
+import { useCallback, useEffect, useState } from 'react';
+import type { PlaylistSummary, Track } from '@baes/core';
 import { AuthProvider, useAuth } from './state';
 import { PlayerProvider } from './player';
 import { AddToPlaylistModal, LikesProvider, PlayerBar } from './components';
@@ -18,9 +18,13 @@ import {
 } from './views';
 
 function Main() {
-  const { user } = useAuth();
+  const { user, client } = useAuth();
+  const [sidePlaylists, setSidePlaylists] = useState<PlaylistSummary[]>([]);
   useEffect(() => {
-    if (navigator.userAgent.includes('Electron')) document.body.classList.add('electron');
+    if (navigator.userAgent.includes('Electron')) {
+      document.body.classList.add('electron', 'vibrancy');
+    }
+    document.body.classList.add('wide-sidebar');
     applyTheme(loadTheme());
   }, []);
   const [view, setView] = useState<View>({ type: 'library' });
@@ -31,48 +35,125 @@ function Main() {
   const [fullscreen, setFullscreen] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
 
+  const refreshSidebar = useCallback(() => {
+    client
+      .listPlaylists()
+      .then((r) => setSidePlaylists(r.playlists))
+      .catch(() => {});
+  }, [client]);
+  useEffect(refreshSidebar, [refreshSidebar, view]);
+
   const common = { navigate: setView, onAddToPlaylist: setModalTrack };
 
-  return (
-    <>
-      <div className="topbar">
-        <span className="logo" onClick={() => setView({ type: 'library' })}>
-          bæs
-        </span>
-        {view.type === 'library' ? (
-          <input
-            placeholder="Search your library"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        ) : (
-          <span className="spacer" />
-        )}
-        <span className="spacer" />
-        <button className="iconbtn" title="Appearance" onClick={() => setShowAppearance(true)}>
-          🎨
-        </button>
-        {user?.role === 'owner' && (
-          <button className="iconbtn" title="Admin" onClick={() => setView({ type: 'admin' })}>
-            ⚙
-          </button>
-        )}
+  const sideNav = (
+    <nav className="sidebar">
+      <div className="side-logo" onClick={() => setView({ type: 'library' })}>
+        bæs
       </div>
+      {(
+        [
+          ['songs', '♪', 'Songs'],
+          ['albums', '◎', 'Albums'],
+          ['artists', '◉', 'Artists'],
+        ] as const
+      ).map(([seg, icon, label]) => (
+        <button
+          key={seg}
+          className={`side-item${view.type === 'library' && segment === seg ? ' active' : ''}`}
+          onClick={() => {
+            setSegment(seg);
+            setView({ type: 'library' });
+          }}
+        >
+          <span className="side-cover">{icon}</span>
+          <span className="label">{label}</span>
+        </button>
+      ))}
+      <button
+        className={`side-item${view.type === 'liked' ? ' active' : ''}`}
+        onClick={() => setView({ type: 'liked' })}
+      >
+        <span className="side-cover" style={{ color: 'var(--heart)' }}>
+          ♥
+        </span>
+        <span className="label">Liked songs</span>
+      </button>
 
-      {view.type === 'library' && (
-        <LibraryView {...common} query={query} segment={segment} setSegment={setSegment} />
-      )}
-      {view.type === 'album' && <AlbumView {...common} id={view.id} />}
-      {view.type === 'artist' && <ArtistView {...common} id={view.id} />}
-      {view.type === 'playlist' && <PlaylistView {...common} id={view.id} />}
-      {view.type === 'liked' && <LikedView {...common} />}
-      {view.type === 'admin' && <AdminView navigate={setView} />}
+      <div className="side-section">Playlists</div>
+      <button
+        className="side-item"
+        onClick={() => {
+          setSegment('playlists');
+          setView({ type: 'library' });
+        }}
+      >
+        <span className="side-cover" style={{ color: 'var(--accent)' }}>
+          ＋
+        </span>
+        <span className="label" style={{ color: 'var(--accent)' }}>
+          All / new…
+        </span>
+      </button>
+      {sidePlaylists.map((p) => (
+        <button
+          key={p.id}
+          className={`side-item${view.type === 'playlist' && view.id === p.id ? ' active' : ''}`}
+          onClick={() => setView({ type: 'playlist', id: p.id })}
+        >
+          {p.artUrl ? (
+            <img className="side-cover" src={client.mediaUrl(p.artUrl)} alt="" />
+          ) : (
+            <span className="side-cover">☰</span>
+          )}
+          <span className="label">{p.title}</span>
+        </button>
+      ))}
+    </nav>
+  );
 
-      <PlayerBar onExpand={() => setFullscreen(true)} />
+  return (
+    <div className="shell">
+      {sideNav}
+      <div className="main-col">
+        <div className="topbar">
+          <span className="logo" onClick={() => setView({ type: 'library' })}>
+            bæs
+          </span>
+          {view.type === 'library' ? (
+            <input
+              placeholder="Search your library"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          ) : (
+            <span className="spacer" />
+          )}
+          <span className="spacer" />
+          <button className="iconbtn" title="Appearance" onClick={() => setShowAppearance(true)}>
+            🎨
+          </button>
+          {user?.role === 'owner' && (
+            <button className="iconbtn" title="Admin" onClick={() => setView({ type: 'admin' })}>
+              ⚙
+            </button>
+          )}
+        </div>
+
+        {view.type === 'library' && (
+          <LibraryView {...common} query={query} segment={segment} setSegment={setSegment} />
+        )}
+        {view.type === 'album' && <AlbumView {...common} id={view.id} />}
+        {view.type === 'artist' && <ArtistView {...common} id={view.id} />}
+        {view.type === 'playlist' && <PlaylistView {...common} id={view.id} />}
+        {view.type === 'liked' && <LikedView {...common} />}
+        {view.type === 'admin' && <AdminView navigate={setView} />}
+
+        <PlayerBar onExpand={() => setFullscreen(true)} />
+      </div>
       {fullscreen && <FullscreenPlayer onClose={() => setFullscreen(false)} />}
       {showAppearance && <AppearanceModal onClose={() => setShowAppearance(false)} />}
       {modalTrack && <AddToPlaylistModal track={modalTrack} onClose={() => setModalTrack(null)} />}
-    </>
+    </div>
   );
 }
 

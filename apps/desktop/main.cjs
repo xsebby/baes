@@ -9,7 +9,10 @@ function createWindow() {
     height: 800,
     minWidth: 720,
     minHeight: 480,
-    backgroundColor: '#0b0b0f',
+    // Native macOS material shows through wherever the page leaves transparency.
+    vibrancy: 'under-window',
+    visualEffectState: 'active',
+    backgroundColor: '#00000000',
     titleBarStyle: 'hiddenInset',
     icon: path.join(__dirname, 'icon.png'),
     webPreferences: {

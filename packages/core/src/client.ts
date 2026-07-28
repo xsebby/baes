@@ -247,6 +247,11 @@ export class ApiClient {
     return this.request('GET', '/api/import-jobs');
   }
 
+  /** Dominant colors of an album/playlist cover (quadrant averages). */
+  artColors(id: string): Promise<{ colors: string[] }> {
+    return this.request('GET', `/api/art-colors/${id}`);
+  }
+
   /** Upload a playlist cover image (browser FormData with a single `file`). */
   async uploadPlaylistCover(playlistId: string, form: FormData): Promise<void> {
     const headers: Record<string, string> = {};

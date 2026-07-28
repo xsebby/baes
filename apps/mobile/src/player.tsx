@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import type { Track } from '@baes/core';
 import { useAuth } from './auth';
@@ -11,6 +19,10 @@ interface PlayerState {
   loading: boolean;
   positionSec: number;
   durationSec: number;
+  rate: number;
+  keepPitch: boolean;
+  setRate: (r: number) => void;
+  setKeepPitch: (b: boolean) => void;
   playTrack: (track: Track, queue?: Track[]) => void;
   toggle: () => void;
   next: () => void;
@@ -26,8 +38,46 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [current, setCurrent] = useState<Track | null>(null);
   const [queue, setQueue] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
+  const [rate, setRateState] = useState(1);
+  const [keepPitch, setKeepPitchState] = useState(true);
+  const rateRef = useRef(1);
+  const keepPitchRef = useRef(true);
   const player = useAudioPlayer(null);
   const status = useAudioPlayerStatus(player);
+
+  const applyRate = useCallback(() => {
+    try {
+      // expo-audio: pitch-correction quality applies on iOS; attempting to
+      // disable correction gives the slowed/sped effect where supported.
+      (player as unknown as { shouldCorrectPitch?: boolean }).shouldCorrectPitch =
+        keepPitchRef.current;
+    } catch {
+      // property may be read-only on some runtimes
+    }
+    try {
+      player.setPlaybackRate(rateRef.current, keepPitchRef.current ? 'high' : 'low');
+    } catch {
+      // no-op if unsupported
+    }
+  }, [player]);
+
+  const setRate = useCallback(
+    (r: number) => {
+      rateRef.current = r;
+      setRateState(r);
+      applyRate();
+    },
+    [applyRate],
+  );
+
+  const setKeepPitch = useCallback(
+    (b: boolean) => {
+      keepPitchRef.current = b;
+      setKeepPitchState(b);
+      applyRate();
+    },
+    [applyRate],
+  );
 
   useEffect(() => {
     setAudioModeAsync({
@@ -63,6 +113,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }
         player.replace({ uri });
         player.play();
+        applyRate();
         try {
           player.setActiveForLockScreen(
             true,
@@ -80,7 +131,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       })();
     },
-    [client, player, localUri],
+    [client, player, localUri, applyRate],
   );
 
   const toggle = useCallback(() => {
@@ -118,6 +169,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       loading,
       positionSec: status.currentTime ?? 0,
       durationSec: status.duration ?? 0,
+      rate,
+      keepPitch,
+      setRate,
+      setKeepPitch,
       playTrack,
       toggle,
       next: () => skipTo(1),
@@ -131,6 +186,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       status.playing,
       status.currentTime,
       status.duration,
+      rate,
+      keepPitch,
+      setRate,
+      setKeepPitch,
       playTrack,
       toggle,
       skipTo,

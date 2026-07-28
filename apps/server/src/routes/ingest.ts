@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { mkdir, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
@@ -94,6 +95,67 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
 
     if (saved.length > 0) scanner.start();
     return reply.code(201).send({ saved, rejected, scanning: saved.length > 0 });
+  });
+
+  // ---- Cover color extraction (quadrant averages, cached) ----
+
+  const colorCache = new Map<string, string[]>();
+
+  app.get('/api/art-colors/:id', { preHandler: app.requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const cached = colorCache.get(id);
+    if (cached) return { colors: cached };
+
+    const [album] = await db
+      .select({ artPath: albums.artPath })
+      .from(albums)
+      .where(eq(albums.id, id))
+      .limit(1);
+    let artPath = album?.artPath ?? null;
+    if (!artPath) {
+      const [pl] = await db
+        .select({ artPath: playlists.artPath })
+        .from(playlists)
+        .where(eq(playlists.id, id))
+        .limit(1);
+      artPath = pl?.artPath ?? null;
+    }
+    if (!artPath) {
+      return reply.code(404).send({ error: 'not_found', message: 'No art' });
+    }
+    try {
+      const { default: jpeg } = await import('jpeg-js');
+      const img = jpeg.decode(await readFile(artPath), { maxMemoryUsageInMB: 64 });
+      const { width, height, data } = img;
+      const quad = (x0: number, y0: number) => {
+        let r = 0,
+          g = 0,
+          b = 0,
+          n = 0;
+        for (let y = y0; y < y0 + height / 2; y += 8) {
+          for (let x = x0; x < x0 + width / 2; x += 8) {
+            const idx = (Math.floor(y) * width + Math.floor(x)) * 4;
+            r += data[idx]!;
+            g += data[idx + 1]!;
+            b += data[idx + 2]!;
+            n++;
+          }
+        }
+        const boost = (v: number) => Math.min(255, Math.round((v / n) * 1.25));
+        return `rgb(${boost(r)}, ${boost(g)}, ${boost(b)})`;
+      };
+      const colors = [
+        quad(0, 0),
+        quad(width / 2, 0),
+        quad(0, height / 2),
+        quad(width / 2, height / 2),
+      ];
+      colorCache.set(id, colors);
+      if (colorCache.size > 500) colorCache.delete(colorCache.keys().next().value!);
+      return { colors };
+    } catch {
+      return reply.code(422).send({ error: 'decode_failed', message: 'Could not decode art' });
+    }
   });
 
   // ---- Playlist cover upload ----

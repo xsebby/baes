@@ -119,9 +119,9 @@ async function availableTarget(directory: string, name: string): Promise<string>
 export async function downloadPillowcaseFile(
   fileId: string,
   uploadsDir: string,
-  pageUrl = `https://pillowcase.su/f/${encodeURIComponent(fileId)}`,
+  pageUrl = `https://pillows.su/f/${encodeURIComponent(fileId)}`,
 ): Promise<string> {
-  const res = await fetch(`https://api.pillowcase.su/api/download/${encodeURIComponent(fileId)}`, {
+  const res = await fetch(`https://api.pillows.su/api/download/${encodeURIComponent(fileId)}`, {
     headers: { accept: 'audio/*, application/octet-stream' },
     signal: AbortSignal.timeout(10 * 60 * 1000),
   });
@@ -131,6 +131,9 @@ export async function downloadPillowcaseFile(
 
   const fromHeader = filenameFromDisposition(res.headers.get('content-disposition'));
   const mimeType = res.headers.get('content-type')?.split(';', 1)[0]?.toLowerCase();
+  if (mimeType && !mimeType.startsWith('audio/') && mimeType !== 'application/octet-stream') {
+    throw new Error(`Pillowcase returned ${mimeType} instead of audio data`);
+  }
   const fromPage = fromHeader ? null : await filenameFromPillowcasePage(fileId, pageUrl);
   const sourceName = fromHeader ?? fromPage;
   const extension = sourceName

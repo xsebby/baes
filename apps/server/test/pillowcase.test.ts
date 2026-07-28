@@ -48,7 +48,7 @@ describe('Pillowcase import', () => {
       expect(saved).toBe('Artist - Song.mp3');
       expect(await readFile(path.join(uploadsDir, saved))).toEqual(contents);
       expect(mockedFetch).toHaveBeenCalledWith(
-        'https://api.pillowcase.su/api/download/abc123def456',
+        'https://api.pillows.su/api/download/abc123def456',
         expect.objectContaining({ headers: { accept: 'audio/*, application/octet-stream' } }),
       );
     } finally {
@@ -81,6 +81,30 @@ describe('Pillowcase import', () => {
         2,
         'https://pillows.su/f/abc123def456',
         expect.objectContaining({ headers: { accept: 'text/html' } }),
+      );
+    } finally {
+      await rm(uploadsDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an HTML response instead of saving it with an audio extension', async () => {
+    const uploadsDir = await mkdtemp(path.join(tmpdir(), 'baes-pillowcase-'));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('<html>Not an audio file</html>', {
+            headers: {
+              'content-disposition': 'attachment; filename="Broken Song.mp3"',
+              'content-type': 'text/html; charset=utf-8',
+            },
+          }),
+      ),
+    );
+
+    try {
+      await expect(downloadPillowcaseFile('abc123def456', uploadsDir)).rejects.toThrow(
+        'Pillowcase returned text/html instead of audio data',
       );
     } finally {
       await rm(uploadsDir, { recursive: true, force: true });

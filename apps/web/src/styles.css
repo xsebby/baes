@@ -385,6 +385,10 @@ input {
 .playerbar .controls button {
   font-size: 18px;
   color: #ddd;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
 }
 .playerbar .controls button:hover {
   color: #fff;
@@ -689,6 +693,10 @@ input {
 .fs-controls button {
   font-size: 24px;
   color: rgba(255, 255, 255, 0.85);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
 }
 .fs-controls button:hover {
   color: #fff;
@@ -703,6 +711,10 @@ input {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.transport-icon {
+  display: block;
+  flex: none;
 }
 
 /* ---- appearance: translucent panels ---- */

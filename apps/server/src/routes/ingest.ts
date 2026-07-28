@@ -332,59 +332,88 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
     return job;
   }
 
-  function startImport(job: ImportJob): void {
+  function startImport(job: ImportJob, scanOnDone = true): Promise<boolean> {
     const pillowcaseId = pillowcaseFileId(job.url);
     if (pillowcaseId) {
-      void downloadPillowcaseFile(pillowcaseId, uploadsDir, pillowcasePageUrl(job.url)!)
+      return downloadPillowcaseFile(pillowcaseId, uploadsDir, pillowcasePageUrl(job.url)!)
         .then(() => {
           job.status = 'done';
-          scanner.start();
+          if (scanOnDone) scanner.start();
+          return true;
         })
         .catch((err: unknown) => {
           job.status = 'error';
           job.error = err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300);
+          return false;
         });
-      return;
     }
 
-    const proc = spawn(
-      'yt-dlp',
-      [
-        '--no-playlist',
-        '-x',
-        '--audio-format',
-        'mp3',
-        '--audio-quality',
-        '0',
-        '--embed-metadata',
-        '--embed-thumbnail',
-        '-o',
-        path.join(uploadsDir, '%(title)s.%(ext)s'),
-        job.url,
-      ],
-      { stdio: ['ignore', 'ignore', 'pipe'] },
-    );
-    let stderr = '';
-    proc.stderr.on('data', (d) => {
-      stderr += String(d);
-    });
-    proc.on('error', (err) => {
-      job.status = 'error';
-      job.error =
-        (err as NodeJS.ErrnoException).code === 'ENOENT'
-          ? 'yt-dlp is not installed on the server'
-          : String(err.message);
-    });
-    proc.on('exit', (code) => {
-      if (job.status === 'error') return;
-      if (code === 0) {
-        job.status = 'done';
-        scanner.start();
-      } else {
+    return new Promise<boolean>((resolve) => {
+      const proc = spawn(
+        'yt-dlp',
+        [
+          '--no-playlist',
+          '-x',
+          '--audio-format',
+          'mp3',
+          '--audio-quality',
+          '0',
+          '--embed-metadata',
+          '--embed-thumbnail',
+          '-o',
+          path.join(uploadsDir, '%(title)s.%(ext)s'),
+          job.url,
+        ],
+        { stdio: ['ignore', 'ignore', 'pipe'] },
+      );
+      let stderr = '';
+      let settled = false;
+      const finish = (success: boolean) => {
+        if (settled) return;
+        settled = true;
+        resolve(success);
+      };
+      proc.stderr.on('data', (d) => {
+        stderr += String(d);
+      });
+      proc.on('error', (err) => {
         job.status = 'error';
-        job.error = stderr.split('\n').filter(Boolean).slice(-2).join(' ').slice(0, 300);
-      }
+        job.error =
+          (err as NodeJS.ErrnoException).code === 'ENOENT'
+            ? 'yt-dlp is not installed on the server'
+            : String(err.message);
+        finish(false);
+      });
+      proc.on('exit', (code) => {
+        if (settled) return;
+        if (code === 0) {
+          job.status = 'done';
+          if (scanOnDone) scanner.start();
+          finish(true);
+        } else {
+          job.status = 'error';
+          job.error = stderr.split('\n').filter(Boolean).slice(-2).join(' ').slice(0, 300);
+          finish(false);
+        }
+      });
     });
+  }
+
+  async function startImportBatch(urls: string[]): Promise<{ succeeded: number; failed: number }> {
+    let cursor = 0;
+    let succeeded = 0;
+    let failed = 0;
+    const worker = async () => {
+      while (cursor < urls.length) {
+        const url = urls[cursor++];
+        if (!url) return;
+        if (await startImport(addJob(url), false)) succeeded++;
+        else failed++;
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, urls.length) }, worker));
+    if (succeeded > 0) scanner.start();
+    return { succeeded, failed };
   }
 
   app.post('/api/import-url', { preHandler: app.requireOwner }, async (req, reply) => {
@@ -397,9 +426,14 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
     const job = addJob(body.data.url);
     if (trackerhubCsvUrl(body.data.url)) {
       void trackerhubMediaUrls(body.data.url)
-        .then((urls) => {
-          job.status = 'done';
-          for (const url of urls) startImport(addJob(url));
+        .then(async (urls) => {
+          const result = await startImportBatch(urls);
+          if (result.failed > 0) {
+            job.status = 'error';
+            job.error = `${result.failed} of ${urls.length} tracks failed to import; ${result.succeeded} succeeded`;
+          } else {
+            job.status = 'done';
+          }
         })
         .catch((err: unknown) => {
           job.status = 'error';
@@ -408,7 +442,7 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
       return reply.code(202).send({ job });
     }
 
-    startImport(job);
+    void startImport(job);
 
     return reply.code(202).send({ job });
   });

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import type { PlaylistSummary, Track, TrackPatch } from '@baes/core';
 import { formatSeconds, formatDuration, useAuth } from './state';
 import { usePlayer } from './player';
+import { NextIcon, PauseIcon, PlayIcon, PreviousIcon, ShuffleIcon } from './player-icons';
 
 // ---- likes ----
 
@@ -240,18 +241,20 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
           <button
             onClick={toggleShuffle}
             title="Shuffle"
-            style={{ fontSize: 15, color: shuffle ? 'var(--accent)' : undefined }}
+            aria-label="Shuffle"
+            aria-pressed={shuffle}
+            style={{ color: shuffle ? 'var(--accent)' : undefined }}
           >
-            🔀
+            <ShuffleIcon size={18} />
           </button>
-          <button onClick={previous} title="Previous">
-            ⏮
+          <button onClick={previous} title="Previous" aria-label="Previous">
+            <PreviousIcon size={20} />
           </button>
-          <button className="play" onClick={toggle} title="Play/pause">
-            {playing ? '❚❚' : '▶'}
+          <button className="play" onClick={toggle} title="Play/pause" aria-label="Play or pause">
+            {playing ? <PauseIcon size={18} /> : <PlayIcon size={18} />}
           </button>
-          <button onClick={next} title="Next">
-            ⏭
+          <button onClick={next} title="Next" aria-label="Next">
+            <NextIcon size={20} />
           </button>
         </div>
         <div className="scrub">

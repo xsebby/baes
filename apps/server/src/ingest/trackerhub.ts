@@ -1,6 +1,6 @@
 const TRACKERHUB_HOSTS = new Set(['artistgrid.cx', 'www.artistgrid.cx']);
 const URL_PATTERN = /https?:\/\/[^\s"'<>\\]+/gi;
-const MAX_TRACKER_LINKS = 50;
+const MAX_TRACKER_LINKS = 250;
 const MEDIA_HOSTS = new Set([
   'bandcamp.com',
   'catbox.moe',
@@ -25,6 +25,17 @@ interface TrackerSheet {
   id: string;
   gid: string | null;
   tabName: string | null;
+  artistGrid: boolean;
+  eraName: string | null;
+  qualities: string[];
+}
+
+function listParams(url: URL, name: string): string[] {
+  return url.searchParams
+    .getAll(name)
+    .flatMap((value) => value.split(','))
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 function trackerSheet(input: string): TrackerSheet | null {
@@ -44,6 +55,11 @@ function trackerSheet(input: string): TrackerSheet | null {
           id,
           gid: url.searchParams.get('gid'),
           tabName: artistGrid ? (artistGridMatch?.[2] ?? null) : null,
+          artistGrid: Boolean(artistGrid),
+          eraName: artistGrid ? url.searchParams.get('era')?.trim() || null : null,
+          qualities: artistGrid
+            ? [...listParams(url, 'quality'), ...listParams(url, 'qualities')]
+            : [],
         }
       : null;
   } catch {
@@ -75,8 +91,17 @@ function trackerhubHtmlUrl(source: TrackerSheet, gid = source.gid): string {
   return url.toString();
 }
 
+function artistGridApiUrl(source: TrackerSheet): string {
+  const base = `https://trackerapi.artistgrid.cx/sh/${encodeURIComponent(source.id)}`;
+  return source.tabName ? `${base}/tab/${encodeURIComponent(source.tabName)}` : `${base}/`;
+}
+
 function normalizedTabName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function normalizedLabel(value: string): string {
+  return value.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
 }
 
 function gidForTab(shell: string, tabName: string): string | null {
@@ -131,6 +156,94 @@ function htmlLinks(html: string): string[] {
   return uniqueLinks(links);
 }
 
+interface ArtistGridTrack {
+  era?: unknown;
+  quality?: unknown;
+  links?: unknown;
+}
+
+interface ArtistGridEra {
+  name?: unknown;
+  tracks?: unknown;
+}
+
+function artistGridTrackLinks(track: ArtistGridTrack): string[] {
+  if (!Array.isArray(track.links)) return [];
+  for (const link of track.links) {
+    const value =
+      typeof link === 'string'
+        ? link
+        : link && typeof link === 'object' && 'url' in link && typeof link.url === 'string'
+          ? link.url
+          : null;
+    const importable = value ? importableUrl(value) : null;
+    // ArtistGrid treats a row's links as fallbacks for the same track. Import
+    // the first source Baes supports rather than downloading duplicate copies.
+    if (importable) return [importable];
+  }
+  return [];
+}
+
+function artistGridEraLinks(payload: unknown, source: TrackerSheet): string[] {
+  if (!payload || typeof payload !== 'object' || !source.eraName) return [];
+  const data = payload as { eras?: unknown; tracks?: unknown };
+  const wantedEra = normalizedLabel(source.eraName);
+  let tracks: ArtistGridTrack[] = [];
+  let eraNames: string[] = [];
+
+  if (Array.isArray(data.eras)) {
+    const eras = data.eras.filter(
+      (era): era is ArtistGridEra => Boolean(era) && typeof era === 'object',
+    );
+    eraNames = eras.flatMap((era) => (typeof era.name === 'string' ? [era.name] : []));
+    tracks = eras
+      .filter((era) => typeof era.name === 'string' && normalizedLabel(era.name) === wantedEra)
+      .flatMap((era) => (Array.isArray(era.tracks) ? (era.tracks as ArtistGridTrack[]) : []));
+  } else if (Array.isArray(data.tracks)) {
+    const flatTracks = data.tracks as ArtistGridTrack[];
+    eraNames = [
+      ...new Set(flatTracks.flatMap((track) => (typeof track.era === 'string' ? [track.era] : []))),
+    ];
+    tracks = flatTracks.filter(
+      (track) => typeof track.era === 'string' && normalizedLabel(track.era) === wantedEra,
+    );
+  }
+
+  if (tracks.length === 0) {
+    const examples = eraNames.slice(0, 12).join(', ');
+    throw new Error(
+      `The “${source.eraName}” ArtistGrid era was not found${
+        examples ? `. Available eras include: ${examples}` : ''
+      }`,
+    );
+  }
+
+  if (source.qualities.length > 0) {
+    const wantedQualities = source.qualities.map(normalizedLabel);
+    const availableQualities = [
+      ...new Set(
+        tracks.flatMap((track) => (typeof track.quality === 'string' ? [track.quality] : [])),
+      ),
+    ];
+    tracks = tracks.filter((track) => {
+      const qualityLabel = track.quality;
+      return (
+        typeof qualityLabel === 'string' &&
+        wantedQualities.some((quality) => normalizedLabel(qualityLabel).includes(quality))
+      );
+    });
+    if (tracks.length === 0) {
+      throw new Error(
+        `No tracks in “${source.eraName}” matched ${source.qualities.join(
+          ' or ',
+        )}. Available qualities: ${availableQualities.join(', ') || 'none listed'}`,
+      );
+    }
+  }
+
+  return uniqueLinks(tracks.flatMap(artistGridTrackLinks));
+}
+
 function isSignInResponse(res: Response, body: string): boolean {
   return (
     res.url.includes('accounts.google.com') ||
@@ -142,6 +255,21 @@ function isSignInResponse(res: Response, body: string): boolean {
 export async function trackerhubMediaUrls(input: string): Promise<string[]> {
   const source = trackerSheet(input);
   if (!source) throw new Error('Not a supported TrackerHub or Google Sheets URL');
+
+  if (source.artistGrid && source.eraName) {
+    const response = await fetch(artistGridApiUrl(source), {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(30 * 1000),
+    });
+    if (!response.ok) {
+      throw new Error(`ArtistGrid could not load this tracker (${response.status})`);
+    }
+    const links = artistGridEraLinks(await response.json(), source);
+    if (links.length === 0) {
+      throw new Error(`No playable media links were found in “${source.eraName}”`);
+    }
+    return links;
+  }
 
   let gid = source.gid;
   if (!gid && source.tabName) {

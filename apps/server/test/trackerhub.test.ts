@@ -82,6 +82,68 @@ describe('TrackerHub import', () => {
     );
   });
 
+  it('imports one ArtistGrid era with optional quality filters and more than 50 tracks', async () => {
+    const id = '1ivoRJskby8zykhH_szifY4a1HIQCTnVh6c2WfIfMbkM';
+    const matchingTracks = Array.from({ length: 99 }, (_, index) => ({
+      quality: index % 2 === 0 ? 'CD Quality' : 'High Quality',
+      links: [
+        { url: `https://pillows.su/f/${String(index).padStart(32, '0')}` },
+        { url: `https://pillows.su/f/duplicate-${index}` },
+      ],
+    }));
+    const mockedFetch = vi.fn(async () =>
+      Response.json({
+        eras: [
+          {
+            name: 'Whole Lotta Red [V1]',
+            tracks: [
+              ...matchingTracks,
+              {
+                quality: 'Low Quality',
+                links: [{ url: 'https://pillows.su/f/low-quality-track' }],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', mockedFetch);
+
+    const url =
+      `https://artistgrid.cx/sh/${id}/main?artist=Playboi%20Carti` +
+      '&era=Whole%20Lotta%20Red%20%5BV1%5D' +
+      '&quality=CD%20Quality&quality=High%20Quality';
+    const links = await trackerhubMediaUrls(url);
+
+    expect(links).toHaveLength(99);
+    expect(links[0]).toBe('https://pillows.su/f/00000000000000000000000000000000');
+    expect(links).not.toContain('https://pillows.su/f/low-quality-track');
+    expect(mockedFetch).toHaveBeenCalledWith(
+      `https://trackerapi.artistgrid.cx/sh/${id}/tab/main`,
+      expect.objectContaining({ headers: { accept: 'application/json' } }),
+    );
+  });
+
+  it('reports available ArtistGrid eras when the selector is wrong', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          eras: [
+            { name: 'Whole Lotta Red [V1]', tracks: [] },
+            { name: 'Whole Lotta Red [V2]', tracks: [] },
+          ],
+        }),
+      ),
+    );
+
+    await expect(
+      trackerhubMediaUrls(
+        'https://artistgrid.cx/sh/1ivoRJskby8zykhH_szifY4a1HIQCTnVh6c2WfIfMbkM/main?era=Wrong',
+      ),
+    ).rejects.toThrow('Available eras include: Whole Lotta Red [V1], Whole Lotta Red [V2]');
+  });
+
   it('explains when the linked sheet is not publicly exportable', async () => {
     vi.stubGlobal(
       'fetch',

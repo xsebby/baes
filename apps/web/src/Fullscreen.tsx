@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { formatSeconds, useAuth } from './state';
 import { usePlayer } from './player';
 import { loadTheme } from './theme';
+import { NextIcon, PauseIcon, PlayIcon, PreviousIcon, ShuffleIcon } from './player-icons';
 
 /** Average color of a region of the cover, sampled via canvas. */
 function sampleColors(img: HTMLImageElement): string[] {
@@ -159,16 +160,22 @@ export function FullscreenPlayer({ onClose }: { onClose: () => void }) {
         <div className="fs-controls">
           <button
             onClick={toggleShuffle}
-            style={{ fontSize: 18, color: shuffle ? 'var(--accent)' : undefined }}
+            style={{ color: shuffle ? 'var(--accent)' : undefined }}
             title="Shuffle"
+            aria-label="Shuffle"
+            aria-pressed={shuffle}
           >
-            🔀
+            <ShuffleIcon size={22} />
           </button>
-          <button onClick={previous}>⏮</button>
-          <button className="fs-play" onClick={toggle}>
-            {playing ? '❚❚' : '▶'}
+          <button onClick={previous} title="Previous" aria-label="Previous">
+            <PreviousIcon size={26} />
           </button>
-          <button onClick={next}>⏭</button>
+          <button className="fs-play" onClick={toggle} title="Play/pause" aria-label="Play or pause">
+            {playing ? <PauseIcon size={24} /> : <PlayIcon size={24} />}
+          </button>
+          <button onClick={next} title="Next" aria-label="Next">
+            <NextIcon size={26} />
+          </button>
         </div>
       </div>
     </div>

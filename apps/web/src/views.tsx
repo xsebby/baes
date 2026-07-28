@@ -953,7 +953,7 @@ function IngestSection() {
             padding: '10px 12px',
             color: 'var(--text)',
           }}
-          placeholder="URL, Pillowcase link, or public TrackerHub sheet"
+          placeholder="URL, Pillowcase, TrackerHub, or ArtistGrid era link"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && startImport()}

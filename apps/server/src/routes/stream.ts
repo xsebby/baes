@@ -1,5 +1,6 @@
+import { spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyPluginAsync } from 'fastify';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -30,10 +31,57 @@ const MIME_BY_EXT: Record<string, string> = {
  * no session header, so native audio players can fetch directly.
  * Supports single-range requests for instant seek (PRD §5.2).
  */
+const TRANSCODE_DIR = 'transcode-cache';
+const inFlight = new Map<string, Promise<void>>();
+
+/**
+ * iOS compatibility: AVPlayer refuses OGG/Opus entirely, and chokes on m4a
+ * files whose cover art is muxed as a PNG/MJPEG *video stream*. `compat`
+ * remuxes m4a losslessly (strip video, copy audio) and transcodes OGG-family
+ * sources to AAC. Results are cached on disk.
+ */
+async function ensureCompatFile(
+  src: string,
+  codec: string,
+  trackId: string,
+): Promise<string | null> {
+  const lower = codec.toLowerCase();
+  const needsEncode = /ogg|opus|vorbis/.test(lower);
+  const needsRemux = /aac|mp4|alac|m4a/.test(lower);
+  if (!needsEncode && !needsRemux) return null; // passthrough
+
+  await mkdir(TRANSCODE_DIR, { recursive: true });
+  const out = path.join(TRANSCODE_DIR, `${trackId}.m4a`);
+  try {
+    await stat(out);
+    return out;
+  } catch {
+    // not cached yet
+  }
+  const existing = inFlight.get(trackId);
+  if (existing) {
+    await existing;
+    return out;
+  }
+  const job = new Promise<void>((resolve, reject) => {
+    const args = needsEncode
+      ? ['-y', '-i', src, '-vn', '-c:a', 'aac', '-b:a', '256k', '-movflags', '+faststart', out]
+      : ['-y', '-i', src, '-vn', '-c:a', 'copy', '-movflags', '+faststart', out];
+    const proc = spawn('ffmpeg', args, { stdio: 'ignore' });
+    proc.on('error', reject);
+    proc.on('exit', (code) =>
+      code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}`)),
+    );
+  }).finally(() => inFlight.delete(trackId));
+  inFlight.set(trackId, job);
+  await job;
+  return out;
+}
+
 export const streamRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, config }) => {
   app.get('/api/stream/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const { exp, sig } = req.query as { exp?: string; sig?: string };
+    const { exp, sig, profile } = req.query as { exp?: string; sig?: string; profile?: string };
     if (!exp || !sig || !verifyMedia(config.SERVER_SECRET, 'stream', id, Number(exp), sig)) {
       return reply.code(403).send({ error: 'forbidden', message: 'Invalid or expired URL' });
     }
@@ -43,6 +91,7 @@ export const streamRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
         relPath: tracks.relPath,
         rootPath: libraryRoots.path,
         contentHash: tracks.contentHash,
+        codec: tracks.codec,
       })
       .from(tracks)
       .innerJoin(libraryRoots, eq(tracks.rootId, libraryRoots.id))
@@ -52,7 +101,21 @@ export const streamRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
       return reply.code(404).send({ error: 'not_found', message: 'Track not found' });
     }
 
-    const filePath = path.join(row.rootPath, row.relPath);
+    let filePath = path.join(row.rootPath, row.relPath);
+    let mime = MIME_BY_EXT[path.extname(row.relPath).toLowerCase()] ?? 'application/octet-stream';
+
+    if (profile === 'compat') {
+      try {
+        const compat = await ensureCompatFile(filePath, row.codec, id);
+        if (compat) {
+          filePath = compat;
+          mime = 'audio/mp4';
+        }
+      } catch (err) {
+        req.log.warn({ err }, 'compat transcode failed; serving original');
+      }
+    }
+
     let fileStat;
     try {
       fileStat = await stat(filePath);
@@ -60,7 +123,6 @@ export const streamRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
       return reply.code(404).send({ error: 'not_found', message: 'File missing on disk' });
     }
 
-    const mime = MIME_BY_EXT[path.extname(row.relPath).toLowerCase()] ?? 'application/octet-stream';
     reply.header('Accept-Ranges', 'bytes');
     reply.header('ETag', `"${row.contentHash}"`);
     reply.header('Cache-Control', 'private, max-age=0');

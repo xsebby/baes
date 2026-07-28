@@ -19,6 +19,8 @@ interface PlayerState {
   volume: number;
   rate: number;
   preservePitch: boolean;
+  shuffle: boolean;
+  toggleShuffle: () => void;
   playTrack: (track: Track, queue?: Track[]) => void;
   toggle: () => void;
   next: () => void;
@@ -48,6 +50,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [preservePitch, setPreservePitchState] = useState(true);
   const rateRef = useRef(1);
   const preservePitchRef = useRef(true);
+  const [shuffle, setShuffle] = useState(false);
+  const shuffleRef = useRef(false);
+  const toggleShuffle = useCallback(() => {
+    shuffleRef.current = !shuffleRef.current;
+    setShuffle(shuffleRef.current);
+  }, []);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const freqRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
 
@@ -122,6 +130,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const cur = currentRef.current;
       const q = queueRef.current;
       if (!cur) return;
+      if (shuffleRef.current && direction === 1 && q.length > 1) {
+        let pick = cur;
+        while (pick.id === cur.id) {
+          pick = q[Math.floor(Math.random() * q.length)]!;
+        }
+        playTrack(pick);
+        return;
+      }
       const idx = q.findIndex((t) => t.id === cur.id);
       const nextTrack = q[idx + direction];
       if (nextTrack) playTrack(nextTrack);
@@ -222,6 +238,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       volume,
       rate,
       preservePitch,
+      shuffle,
+      toggleShuffle,
       playTrack,
       toggle,
       next: () => skipTo(1),

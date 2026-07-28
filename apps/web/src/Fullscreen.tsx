@@ -39,8 +39,18 @@ function sampleColors(img: HTMLImageElement): string[] {
 
 export function FullscreenPlayer({ onClose }: { onClose: () => void }) {
   const { client } = useAuth();
-  const { current, playing, positionSec, durationSec, toggle, next, previous, seekTo } =
-    usePlayer();
+  const {
+    current,
+    playing,
+    positionSec,
+    durationSec,
+    shuffle,
+    toggleShuffle,
+    toggle,
+    next,
+    previous,
+    seekTo,
+  } = usePlayer();
   const [colors, setColors] = useState<string[]>(['#3a2f5c', '#1c4a5e', '#5c2f45', '#2f5c3a']);
   const [dragSec, setDragSec] = useState<number | null>(null);
   const fsStyle = loadTheme().fsStyle;
@@ -147,6 +157,13 @@ export function FullscreenPlayer({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="fs-controls">
+          <button
+            onClick={toggleShuffle}
+            style={{ fontSize: 18, color: shuffle ? 'var(--accent)' : undefined }}
+            title="Shuffle"
+          >
+            🔀
+          </button>
           <button onClick={previous}>⏮</button>
           <button className="fs-play" onClick={toggle}>
             {playing ? '❚❚' : '▶'}

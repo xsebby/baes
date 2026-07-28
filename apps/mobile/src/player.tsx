@@ -21,6 +21,8 @@ interface PlayerState {
   durationSec: number;
   rate: number;
   keepPitch: boolean;
+  shuffle: boolean;
+  toggleShuffle: () => void;
   setRate: (r: number) => void;
   setKeepPitch: (b: boolean) => void;
   playTrack: (track: Track, queue?: Track[]) => void;
@@ -32,6 +34,13 @@ interface PlayerState {
 
 const PlayerContext = createContext<PlayerState | null>(null);
 
+/** Signed stream URLs carry their expiry; fresh = >90s of validity left. */
+function urlIsFresh(streamPath: string): boolean {
+  const m = /[?&]exp=(\d+)/.exec(streamPath);
+  if (!m) return false;
+  return Number(m[1]) * 1000 - Date.now() > 90 * 1000;
+}
+
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const { client } = useAuth();
   const { localUri } = useDownloads();
@@ -40,6 +49,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [rate, setRateState] = useState(1);
   const [keepPitch, setKeepPitchState] = useState(true);
+  const [shuffle, setShuffle] = useState(false);
+  const shuffleRef = useRef(false);
+  const toggleShuffle = useCallback(() => {
+    shuffleRef.current = !shuffleRef.current;
+    setShuffle(shuffleRef.current);
+  }, []);
   const rateRef = useRef(1);
   const keepPitchRef = useRef(true);
   const player = useAudioPlayer(null);
@@ -100,16 +115,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         if (local) {
           uri = local;
         } else {
-          // Always fetch a fresh signed URL — the one embedded in a library
-          // listing may have expired while the app sat open.
+          // Only hit the network for a fresh signed URL when the embedded one
+          // is stale — auto-advance in the background must not depend on a
+          // fetch (iOS suspends us the moment audio goes idle).
           let streamPath = track.streamUrl;
-          try {
-            const fresh = await client.refreshStreamUrl(track.id);
-            streamPath = fresh.url;
-          } catch {
-            // offline or transient failure — try the embedded URL anyway
+          if (!urlIsFresh(streamPath)) {
+            try {
+              const fresh = await client.refreshStreamUrl(track.id);
+              streamPath = fresh.url;
+            } catch {
+              // offline or transient failure — try the embedded URL anyway
+            }
           }
-          uri = client.mediaUrl(streamPath);
+          uri = `${client.mediaUrl(streamPath)}&profile=compat`;
         }
         player.replace({ uri });
         player.play();
@@ -149,6 +167,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const skipTo = useCallback(
     (direction: 1 | -1) => {
       if (!current) return;
+      if (shuffleRef.current && direction === 1 && queue.length > 1) {
+        let pick = current;
+        while (pick.id === current.id) {
+          pick = queue[Math.floor(Math.random() * queue.length)]!;
+        }
+        playTrack(pick);
+        return;
+      }
       const idx = queue.findIndex((t) => t.id === current.id);
       const nextTrack = queue[idx + direction];
       if (nextTrack) playTrack(nextTrack);
@@ -156,9 +182,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     [current, queue, playTrack],
   );
 
-  // Auto-advance when a track finishes.
+  // Auto-advance exactly once per finish — didJustFinish stays true across
+  // several status updates while skipTo's identity changes, so a naive effect
+  // re-fires and skips through multiple tracks.
+  const finishHandledRef = useRef(false);
   useEffect(() => {
-    if (status.didJustFinish) skipTo(1);
+    if (status.didJustFinish && !finishHandledRef.current) {
+      finishHandledRef.current = true;
+      skipTo(1);
+    } else if (!status.didJustFinish) {
+      finishHandledRef.current = false;
+    }
   }, [status.didJustFinish, skipTo]);
 
   const value = useMemo(
@@ -171,6 +205,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       durationSec: status.duration ?? 0,
       rate,
       keepPitch,
+      shuffle,
+      toggleShuffle,
       setRate,
       setKeepPitch,
       playTrack,
@@ -188,6 +224,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       status.duration,
       rate,
       keepPitch,
+      shuffle,
+      toggleShuffle,
       setRate,
       setKeepPitch,
       playTrack,

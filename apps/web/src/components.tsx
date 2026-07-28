@@ -194,6 +194,8 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
     volume,
     rate,
     preservePitch,
+    shuffle,
+    toggleShuffle,
     toggle,
     next,
     previous,
@@ -235,6 +237,13 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
 
       <div className="center">
         <div className="controls">
+          <button
+            onClick={toggleShuffle}
+            title="Shuffle"
+            style={{ fontSize: 15, color: shuffle ? 'var(--accent)' : undefined }}
+          >
+            🔀
+          </button>
           <button onClick={previous} title="Previous">
             ⏮
           </button>

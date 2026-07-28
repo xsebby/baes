@@ -27,6 +27,8 @@ export default function NowPlaying() {
     durationSec,
     rate,
     keepPitch,
+    shuffle,
+    toggleShuffle,
     setRate,
     setKeepPitch,
     toggle,
@@ -204,7 +206,9 @@ export default function NowPlaying() {
         <Pressable onPress={next} hitSlop={12}>
           <Ionicons name="play-skip-forward" size={32} color="#fff" />
         </Pressable>
-        <View style={styles.rateBtn} />
+        <Pressable onPress={toggleShuffle} hitSlop={12} style={styles.rateBtn}>
+          <Ionicons name="shuffle" size={22} color={shuffle ? '#8ab4ff' : '#777'} />
+        </Pressable>
       </View>
 
       <Modal visible={showSpeed} transparent animationType="fade">

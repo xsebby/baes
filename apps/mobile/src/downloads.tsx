@@ -45,9 +45,9 @@ function extFromTrack(track: Track): string {
   const codec = track.codec.toLowerCase();
   if (codec.includes('flac')) return 'flac';
   if (codec.includes('wav') || codec.includes('pcm')) return 'wav';
-  if (codec.includes('aac') || codec.includes('mp4')) return 'm4a';
-  if (codec.includes('ogg') || codec.includes('vorbis')) return 'ogg';
-  if (codec.includes('opus')) return 'opus';
+  // compat streaming serves m4a for both mp4-family and ogg-family sources
+  if (codec.includes('aac') || codec.includes('mp4') || codec.includes('alac')) return 'm4a';
+  if (codec.includes('ogg') || codec.includes('vorbis') || codec.includes('opus')) return 'm4a';
   return 'mp3';
 }
 
@@ -101,7 +101,7 @@ export function DownloadsProvider({ children }: { children: React.ReactNode }) {
           const { url } = await client.refreshStreamUrl(track.id);
           const dest = new File(downloadsDir(), `${track.id}.${extFromTrack(track)}`);
           if (dest.exists) dest.delete();
-          const task = File.createDownloadTask(client.mediaUrl(url), dest);
+          const task = File.createDownloadTask(`${client.mediaUrl(url)}&profile=compat`, dest);
           const file = await task.downloadAsync();
           if (!file) throw new Error('download failed');
           persist({

@@ -252,6 +252,20 @@ export class ApiClient {
     return this.request('GET', `/api/art-colors/${id}`);
   }
 
+  /** Upload/replace an album cover (browser FormData with a single `file`). */
+  async uploadAlbumCover(albumId: string, form: FormData): Promise<void> {
+    const headers: Record<string, string> = {};
+    const token = await this.getToken();
+    if (token) headers.authorization = `Bearer ${token}`;
+    const res = await this.fetchImpl(`${this.baseUrl}/api/albums/${albumId}/cover`, {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+    if (!res.ok)
+      throw new ApiError(res.status, 'upload_failed', `Cover upload failed (${res.status})`);
+  }
+
   /** Upload a playlist cover image (browser FormData with a single `file`). */
   async uploadPlaylistCover(playlistId: string, form: FormData): Promise<void> {
     const headers: Record<string, string> = {};

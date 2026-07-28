@@ -2,8 +2,8 @@ export interface ThemeSettings {
   accent: string;
   /** Fullscreen background style */
   fsStyle: 'aurora' | 'pulse' | 'minimal';
-  /** Panel look: solid or translucent glass */
-  panels: 'opaque' | 'clear';
+  /** Panel look: solid, translucent glass, or accent-tinted glass */
+  panels: 'opaque' | 'clear' | 'tinted';
 }
 
 export const ACCENTS: { name: string; value: string }[] = [
@@ -33,7 +33,8 @@ function defaults(): ThemeSettings {
 
 export function applyTheme(t: ThemeSettings): void {
   document.documentElement.style.setProperty('--accent', t.accent);
-  document.body.classList.toggle('panels-clear', t.panels === 'clear');
+  document.body.classList.toggle('panels-clear', t.panels !== 'opaque');
+  document.body.classList.toggle('panels-tinted', t.panels === 'tinted');
 }
 
 export function saveTheme(t: ThemeSettings): void {

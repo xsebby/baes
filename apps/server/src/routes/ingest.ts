@@ -158,6 +158,33 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
     }
   });
 
+  // ---- Album cover upload/replace ----
+
+  app.post('/api/albums/:id/cover', { preHandler: app.requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const [album] = await db
+      .select({ id: albums.id })
+      .from(albums)
+      .where(eq(albums.id, id))
+      .limit(1);
+    if (!album) {
+      return reply.code(404).send({ error: 'not_found', message: 'Album not found' });
+    }
+    const part = await req.file();
+    if (!part || !/^image\/(jpeg|png|webp)$/.test(part.mimetype)) {
+      return reply
+        .code(400)
+        .send({ error: 'invalid_request', message: 'Send a JPEG, PNG, or WebP image' });
+    }
+    const artDir = path.resolve(config.DATA_DIR, 'art');
+    await mkdir(artDir, { recursive: true });
+    const target = path.join(artDir, `album-${id}.jpg`);
+    await pipeline(part.file, createWriteStream(target));
+    await db.update(albums).set({ artPath: target, updatedSeq: bumpSeq }).where(eq(albums.id, id));
+    colorCache.delete(id);
+    return reply.code(204).send();
+  });
+
   // ---- Playlist cover upload ----
 
   app.post('/api/playlists/:id/cover', { preHandler: app.requireAuth }, async (req, reply) => {

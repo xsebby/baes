@@ -710,11 +710,11 @@ body.panels-clear {
   --panel: rgba(255, 255, 255, 0.07);
   --panel-2: rgba(255, 255, 255, 0.12);
 }
+/* blur only the big fixed surfaces — blurring in-scroll controls murders
+   scroll performance */
 body.panels-clear .playerbar,
 body.panels-clear .modal,
-body.panels-clear .topbar input,
-body.panels-clear .iconbtn,
-body.panels-clear .segment {
+body.panels-clear .sidebar {
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 }
@@ -1110,4 +1110,29 @@ body.electron.vibrancy.panels-clear .sidebar {
 }
 body.electron.vibrancy.panels-clear .playerbar {
   background: rgba(23, 23, 29, 0.3);
+}
+
+/* ==== scroll performance ==== */
+.content {
+  contain: content;
+  -webkit-overflow-scrolling: touch;
+}
+.track-row:hover .art,
+.list-row:hover .bubble {
+  will-change: transform;
+}
+
+/* ==== tinted glass ==== */
+body.panels-tinted {
+  --panel: color-mix(in srgb, var(--accent) 9%, rgba(255, 255, 255, 0.04));
+  --panel-2: color-mix(in srgb, var(--accent) 14%, rgba(255, 255, 255, 0.07));
+}
+body.panels-tinted .main-col {
+  background: color-mix(in srgb, var(--accent) 5%, rgb(11 11 15 / 0.85));
+}
+body.electron.vibrancy.panels-tinted .main-col {
+  background: color-mix(in srgb, var(--accent) 8%, rgb(11 11 15 / 0.35));
+}
+body.electron.vibrancy.panels-tinted .sidebar {
+  background: color-mix(in srgb, var(--accent) 10%, rgb(16 16 20 / 0.25));
 }

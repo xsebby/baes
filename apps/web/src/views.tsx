@@ -396,12 +396,13 @@ export function AlbumView({ id, navigate, onAddToPlaylist }: ViewProps & { id: s
   const { client } = useAuth();
   const [album, setAlbum] = useState<AlbumDetail | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     client
       .getAlbum(id)
       .then(setAlbum)
       .catch(() => {});
   }, [client, id]);
+  useEffect(load, [load]);
 
   if (!album) return <div className="empty">Loading…</div>;
   return (
@@ -420,6 +421,22 @@ export function AlbumView({ id, navigate, onAddToPlaylist }: ViewProps & { id: s
           </div>
           <div className="actions">
             <PlayAllButton tracks={album.tracks} />
+            <label className="iconbtn" style={{ cursor: 'pointer' }}>
+              Set cover
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style={{ display: 'none' }}
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  const form = new FormData();
+                  form.append('file', f);
+                  await client.uploadAlbumCover(album.id, form);
+                  load();
+                }}
+              />
+            </label>
           </div>
         </div>
       </div>

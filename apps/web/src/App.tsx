@@ -203,13 +203,19 @@ function AppearanceModal({ onClose }: { onClose: () => void }) {
 
         <div className="muted small">Panels</div>
         <div className="opt-row">
-          {(['opaque', 'clear'] as const).map((p) => (
+          {(
+            [
+              ['opaque', 'Opaque'],
+              ['clear', 'Clear glass'],
+              ['tinted', 'Tinted glass'],
+            ] as const
+          ).map(([p, label]) => (
             <button
               key={p}
               className={`opt${theme.panels === p ? ' active' : ''}`}
               onClick={() => update({ panels: p })}
             >
-              {p === 'opaque' ? 'Opaque' : 'Clear glass'}
+              {label}
             </button>
           ))}
         </div>

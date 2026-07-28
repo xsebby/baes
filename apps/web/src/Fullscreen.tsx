@@ -170,7 +170,12 @@ export function FullscreenPlayer({ onClose }: { onClose: () => void }) {
           <button onClick={previous} title="Previous" aria-label="Previous">
             <PreviousIcon size={26} />
           </button>
-          <button className="fs-play" onClick={toggle} title="Play/pause" aria-label="Play or pause">
+          <button
+            className="fs-play"
+            onClick={toggle}
+            title="Play/pause"
+            aria-label="Play or pause"
+          >
             {playing ? <PauseIcon size={24} /> : <PlayIcon size={24} />}
           </button>
           <button onClick={next} title="Next" aria-label="Next">

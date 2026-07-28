@@ -2,10 +2,7 @@ interface PlayerIconProps {
   size?: number;
 }
 
-function IconFrame({
-  size = 20,
-  children,
-}: PlayerIconProps & { children: React.ReactNode }) {
+function IconFrame({ size = 20, children }: PlayerIconProps & { children: React.ReactNode }) {
   return (
     <svg
       className="transport-icon"

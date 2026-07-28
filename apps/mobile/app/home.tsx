@@ -15,6 +15,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { AlbumSummary, ArtistSummary, PlaylistSummary, Track } from '@baes/core';
 import { useAuth } from '../src/auth';
+import { useDownloads } from '../src/downloads';
 import { usePlayer } from '../src/player';
 import { NowPlayingBar } from '../src/components/NowPlayingBar';
 import { TrackRow } from '../src/components/TrackRow';
@@ -24,6 +25,7 @@ type Segment = 'songs' | 'albums' | 'artists' | 'playlists';
 export default function Library() {
   const { client, user } = useAuth();
   const { current } = usePlayer();
+  const { download } = useDownloads();
   const [segment, setSegment] = useState<Segment>('songs');
   const [tracks, setTracks] = useState<Track[]>([]);
   const [albums, setAlbums] = useState<AlbumSummary[]>([]);
@@ -96,7 +98,19 @@ export default function Library() {
           contentContainerStyle={styles.albumGrid}
           refreshControl={refreshControl}
           renderItem={({ item }) => (
-            <Pressable style={styles.albumCard} onPress={() => router.push(`/album/${item.id}`)}>
+            <Pressable
+              style={styles.albumCard}
+              onPress={() => router.push(`/album/${item.id}`)}
+              onLongPress={async () => {
+                if (!client) return;
+                const detail = await client.getAlbum(item.id).catch(() => null);
+                if (detail?.tracks.length) {
+                  download(detail.tracks);
+                  Alert.alert('Downloading', `${detail.tracks.length} tracks from ${detail.title}`);
+                }
+              }}
+              delayLongPress={400}
+            >
               {item.artUrl && client ? (
                 <Image source={{ uri: client.mediaUrl(item.artUrl) }} style={styles.albumArt} />
               ) : (
@@ -186,7 +200,20 @@ export default function Library() {
             </>
           }
           renderItem={({ item }) => (
-            <Pressable style={styles.artistRow} onPress={() => router.push(`/playlist/${item.id}`)}>
+            <Pressable
+              style={styles.artistRow}
+              onPress={() => router.push(`/playlist/${item.id}`)}
+              onLongPress={async () => {
+                if (!client) return;
+                const detail = await client.getPlaylist(item.id).catch(() => null);
+                const tracks = detail?.items.flatMap((i) => (i.track ? [i.track] : [])) ?? [];
+                if (tracks.length) {
+                  download(tracks);
+                  Alert.alert('Downloading', `${tracks.length} tracks from ${detail!.title}`);
+                }
+              }}
+              delayLongPress={400}
+            >
               {item.artUrl && client ? (
                 <Image source={{ uri: client.mediaUrl(item.artUrl) }} style={styles.playlistArt} />
               ) : (

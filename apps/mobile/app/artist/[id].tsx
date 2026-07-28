@@ -4,6 +4,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { ArtistDetail, Track } from '@baes/core';
 import { useAuth } from '../../src/auth';
+import { useDownloads } from '../../src/downloads';
 import { usePlayer } from '../../src/player';
 import { NowPlayingBar } from '../../src/components/NowPlayingBar';
 import { TrackRow } from '../../src/components/TrackRow';
@@ -12,6 +13,7 @@ export default function ArtistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { client } = useAuth();
   const { playTrack } = usePlayer();
+  const { download, isDownloaded, queueLength } = useDownloads();
   const [artist, setArtist] = useState<ArtistDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,13 +59,33 @@ export default function ArtistScreen() {
           <View style={styles.header}>
             <Text style={styles.name}>{artist.name}</Text>
             <Text style={styles.meta}>{artist.tracks.length} tracks</Text>
-            <Pressable
-              style={styles.playAll}
-              onPress={() => artist.tracks[0] && playTrack(artist.tracks[0], artist.tracks)}
-            >
-              <Ionicons name="play" size={18} color="#000" />
-              <Text style={styles.playAllText}>Play all</Text>
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable
+                style={styles.playAll}
+                onPress={() => artist.tracks[0] && playTrack(artist.tracks[0], artist.tracks)}
+              >
+                <Ionicons name="play" size={18} color="#000" />
+                <Text style={styles.playAllText}>Play all</Text>
+              </Pressable>
+              <Pressable style={styles.downloadAll} onPress={() => download(artist.tracks)}>
+                <Ionicons
+                  name={
+                    artist.tracks.every((t) => isDownloaded(t.id))
+                      ? 'arrow-down-circle'
+                      : 'arrow-down-circle-outline'
+                  }
+                  size={18}
+                  color={artist.tracks.every((t) => isDownloaded(t.id)) ? '#7dd87d' : '#fff'}
+                />
+                <Text style={styles.downloadAllText}>
+                  {artist.tracks.every((t) => isDownloaded(t.id))
+                    ? 'Offline'
+                    : queueLength > 0
+                      ? `${queueLength}…`
+                      : 'Download'}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         }
         renderSectionHeader={({ section }) => (
@@ -103,6 +125,18 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   playAllText: { color: '#000', fontWeight: '700', fontSize: 15 },
+  downloadAll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#333',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  downloadAllText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',

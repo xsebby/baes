@@ -12,6 +12,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { AlbumDetail } from '@baes/core';
 import { useAuth } from '../../src/auth';
+import { useDownloads } from '../../src/downloads';
 import { usePlayer } from '../../src/player';
 import { NowPlayingBar } from '../../src/components/NowPlayingBar';
 import { TrackRow } from '../../src/components/TrackRow';
@@ -20,6 +21,7 @@ export default function AlbumScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { client } = useAuth();
   const { playTrack } = usePlayer();
+  const { download, isDownloaded, queueLength } = useDownloads();
   const [album, setAlbum] = useState<AlbumDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,13 +59,33 @@ export default function AlbumScreen() {
               {album.artistName ?? 'Unknown artist'}
               {album.year ? ` · ${album.year}` : ''} · {album.tracks.length} tracks · {totalMin} min
             </Text>
-            <Pressable
-              style={styles.playAll}
-              onPress={() => album.tracks[0] && playTrack(album.tracks[0], album.tracks)}
-            >
-              <Ionicons name="play" size={18} color="#000" />
-              <Text style={styles.playAllText}>Play</Text>
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable
+                style={styles.playAll}
+                onPress={() => album.tracks[0] && playTrack(album.tracks[0], album.tracks)}
+              >
+                <Ionicons name="play" size={18} color="#000" />
+                <Text style={styles.playAllText}>Play</Text>
+              </Pressable>
+              <Pressable style={styles.downloadAll} onPress={() => download(album.tracks)}>
+                <Ionicons
+                  name={
+                    album.tracks.every((t) => isDownloaded(t.id))
+                      ? 'arrow-down-circle'
+                      : 'arrow-down-circle-outline'
+                  }
+                  size={18}
+                  color={album.tracks.every((t) => isDownloaded(t.id)) ? '#7dd87d' : '#fff'}
+                />
+                <Text style={styles.downloadAllText}>
+                  {album.tracks.every((t) => isDownloaded(t.id))
+                    ? 'Offline'
+                    : queueLength > 0
+                      ? `${queueLength}…`
+                      : 'Download'}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         }
         renderItem={({ item }) => (
@@ -93,5 +115,17 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   playAllText: { color: '#000', fontWeight: '700', fontSize: 15 },
+  downloadAll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#333',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  downloadAllText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   error: { color: '#ff6b6b', textAlign: 'center', marginTop: 60 },
 });

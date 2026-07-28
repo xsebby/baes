@@ -1,4 +1,4 @@
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import type { Track } from '@baes/core';
@@ -20,8 +20,10 @@ interface Props {
 export function TrackRow({ track, queue, showArt = true, showTrackNo = false, trailing }: Props) {
   const { client } = useAuth();
   const { playTrack, current, playing } = usePlayer();
-  const { isDownloaded } = useDownloads();
+  const { isDownloaded, download, remove, activeId } = useDownloads();
   const active = current?.id === track.id;
+  const downloaded = isDownloaded(track.id);
+  const downloading = activeId === track.id;
 
   return (
     <Pressable
@@ -58,7 +60,24 @@ export function TrackRow({ track, queue, showArt = true, showTrackNo = false, tr
           {track.albumTitle ? ` · ${track.albumTitle}` : ''}
         </Text>
       </View>
-      {isDownloaded(track.id) && <Ionicons name="arrow-down-circle" size={14} color="#7dd87d" />}
+      <Pressable
+        hitSlop={8}
+        onPress={(e) => {
+          e.stopPropagation?.();
+          if (downloaded) remove(track.id);
+          else download([track]);
+        }}
+      >
+        {downloading ? (
+          <ActivityIndicator size="small" color="#8ab4ff" />
+        ) : (
+          <Ionicons
+            name={downloaded ? 'arrow-down-circle' : 'arrow-down-circle-outline'}
+            size={20}
+            color={downloaded ? '#7dd87d' : '#555'}
+          />
+        )}
+      </Pressable>
       <Text style={styles.duration}>{formatDuration(track.durationMs)}</Text>
       {trailing}
     </Pressable>

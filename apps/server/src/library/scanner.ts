@@ -188,7 +188,9 @@ export class LibraryScanner {
     const albumArtistName =
       common?.albumartist?.trim() || artistName?.split(',')[0]?.trim() || null;
     const albumArtistId = albumArtistName ? await this.getOrCreateArtist(albumArtistName) : null;
-    const albumId = albumTitle ? await this.getOrCreateAlbum(albumTitle, albumArtistId) : null;
+    const albumId = albumTitle
+      ? await this.getOrCreateAlbum(albumTitle, albumArtistId, common?.year ?? null)
+      : null;
 
     if (albumId && meta?.common.picture?.[0]) {
       await this.saveAlbumArt(albumId, meta.common.picture[0].data);
@@ -266,24 +268,42 @@ export class LibraryScanner {
 
   private albumCache = new Map<string, string>();
 
-  private async getOrCreateAlbum(title: string, artistId: string | null): Promise<string> {
+  private async getOrCreateAlbum(
+    title: string,
+    artistId: string | null,
+    year: number | null,
+  ): Promise<string> {
     const key = `${title.toLowerCase()}|${artistId ?? ''}`;
     const cached = this.albumCache.get(key);
-    if (cached) return cached;
+    if (cached) {
+      if (year) {
+        await this.db
+          .update(albums)
+          .set({ year, updatedSeq: bumpSeq })
+          .where(and(eq(albums.id, cached), isNull(albums.year)));
+      }
+      return cached;
+    }
     const conditions = [sql`lower(${albums.title}) = ${title.toLowerCase()}`];
     conditions.push(artistId ? eq(albums.artistId, artistId) : isNull(albums.artistId));
     const [existing] = await this.db
-      .select({ id: albums.id })
+      .select({ id: albums.id, year: albums.year })
       .from(albums)
       .where(and(...conditions))
       .limit(1);
     if (existing) {
+      if (year && !existing.year) {
+        await this.db
+          .update(albums)
+          .set({ year, updatedSeq: bumpSeq })
+          .where(eq(albums.id, existing.id));
+      }
       this.albumCache.set(key, existing.id);
       return existing.id;
     }
     const [created] = await this.db
       .insert(albums)
-      .values({ title, artistId })
+      .values({ title, artistId, year })
       .returning({ id: albums.id });
     this.albumCache.set(key, created!.id);
     return created!.id;

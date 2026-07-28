@@ -18,7 +18,13 @@ import {
   pillowcaseFileId,
   pillowcasePageUrl,
 } from '../ingest/pillowcase.js';
-import { trackerhubCsvUrl, trackerhubMediaUrls } from '../ingest/trackerhub.js';
+import { embedAudioMetadata } from '../ingest/audio-metadata.js';
+import {
+  trackerhubCsvUrl,
+  trackerhubImportItems,
+  type TrackerImportItem,
+  type TrackerImportMetadata,
+} from '../ingest/trackerhub.js';
 
 const AUDIO_EXTENSIONS = new Set([
   '.mp3',
@@ -61,6 +67,7 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
   });
 
   const uploadsDir = path.resolve(config.DATA_DIR, 'uploads');
+  const metadataCoverCacheDir = path.resolve(config.DATA_DIR, 'metadata-covers');
 
   /** Uploads live in a server-managed library root under DATA_DIR. */
   async function ensureUploadsRoot(): Promise<void> {
@@ -332,11 +339,24 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
     return job;
   }
 
-  function startImport(job: ImportJob, scanOnDone = true): Promise<boolean> {
+  function startImport(
+    job: ImportJob,
+    scanOnDone = true,
+    metadata?: TrackerImportMetadata,
+  ): Promise<boolean> {
     const pillowcaseId = pillowcaseFileId(job.url);
     if (pillowcaseId) {
       return downloadPillowcaseFile(pillowcaseId, uploadsDir, pillowcasePageUrl(job.url)!)
-        .then(() => {
+        .then(async (filename) => {
+          if (metadata) {
+            const filePath = path.join(uploadsDir, filename);
+            try {
+              await embedAudioMetadata(filePath, metadata, metadataCoverCacheDir);
+            } catch (error) {
+              await unlink(filePath).catch(() => {});
+              throw error;
+            }
+          }
           job.status = 'done';
           if (scanOnDone) scanner.start();
           return true;
@@ -399,19 +419,21 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
     });
   }
 
-  async function startImportBatch(urls: string[]): Promise<{ succeeded: number; failed: number }> {
+  async function startImportBatch(
+    items: TrackerImportItem[],
+  ): Promise<{ succeeded: number; failed: number }> {
     let cursor = 0;
     let succeeded = 0;
     let failed = 0;
     const worker = async () => {
-      while (cursor < urls.length) {
-        const url = urls[cursor++];
-        if (!url) return;
-        if (await startImport(addJob(url), false)) succeeded++;
+      while (cursor < items.length) {
+        const item = items[cursor++];
+        if (!item) return;
+        if (await startImport(addJob(item.url), false, item.metadata)) succeeded++;
         else failed++;
       }
     };
-    await Promise.all(Array.from({ length: Math.min(4, urls.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(4, items.length) }, worker));
     if (succeeded > 0) scanner.start();
     return { succeeded, failed };
   }
@@ -425,12 +447,12 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
 
     const job = addJob(body.data.url);
     if (trackerhubCsvUrl(body.data.url)) {
-      void trackerhubMediaUrls(body.data.url)
-        .then(async (urls) => {
-          const result = await startImportBatch(urls);
+      void trackerhubImportItems(body.data.url)
+        .then(async (items) => {
+          const result = await startImportBatch(items);
           if (result.failed > 0) {
             job.status = 'error';
-            job.error = `${result.failed} of ${urls.length} tracks failed to import; ${result.succeeded} succeeded`;
+            job.error = `${result.failed} of ${items.length} tracks failed to import; ${result.succeeded} succeeded`;
           } else {
             job.status = 'done';
           }

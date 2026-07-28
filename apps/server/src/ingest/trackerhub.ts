@@ -26,8 +26,22 @@ interface TrackerSheet {
   gid: string | null;
   tabName: string | null;
   artistGrid: boolean;
+  artistName: string | null;
   eraName: string | null;
   qualities: string[];
+}
+
+export interface TrackerImportMetadata {
+  title: string;
+  artist: string | null;
+  album: string | null;
+  year: number | null;
+  coverUrl: string | null;
+}
+
+export interface TrackerImportItem {
+  url: string;
+  metadata?: TrackerImportMetadata;
 }
 
 function listParams(url: URL, name: string): string[] {
@@ -56,6 +70,7 @@ function trackerSheet(input: string): TrackerSheet | null {
           gid: url.searchParams.get('gid'),
           tabName: artistGrid ? (artistGridMatch?.[2] ?? null) : null,
           artistGrid: Boolean(artistGrid),
+          artistName: artistGrid ? url.searchParams.get('artist')?.trim() || null : null,
           eraName: artistGrid ? url.searchParams.get('era')?.trim() || null : null,
           qualities: artistGrid
             ? [...listParams(url, 'quality'), ...listParams(url, 'qualities')]
@@ -176,17 +191,21 @@ function htmlLinks(html: string): string[] {
 
 interface ArtistGridTrack {
   era?: unknown;
+  file_date?: unknown;
+  leak_date?: unknown;
+  name?: unknown;
   quality?: unknown;
   links?: unknown;
 }
 
 interface ArtistGridEra {
+  cover_art?: unknown;
   name?: unknown;
   tracks?: unknown;
 }
 
-function artistGridTrackLinks(track: ArtistGridTrack): string[] {
-  if (!Array.isArray(track.links)) return [];
+function artistGridTrackUrl(track: ArtistGridTrack): string | null {
+  if (!Array.isArray(track.links)) return null;
   for (const link of track.links) {
     const value =
       typeof link === 'string'
@@ -197,17 +216,61 @@ function artistGridTrackLinks(track: ArtistGridTrack): string[] {
     const importable = value ? importableUrl(value) : null;
     // ArtistGrid treats a row's links as fallbacks for the same track. Import
     // the first source Baes supports rather than downloading duplicate copies.
-    if (importable) return [importable];
+    if (importable) return importable;
   }
-  return [];
+  return null;
 }
 
-function artistGridEraLinks(payload: unknown, source: TrackerSheet): string[] {
+function artistGridTrackTitle(track: ArtistGridTrack): string {
+  if (typeof track.name === 'string') return track.name.trim();
+  if (track.name && typeof track.name === 'object') {
+    if ('title' in track.name && typeof track.name.title === 'string') {
+      return track.name.title.trim();
+    }
+    if ('raw' in track.name && typeof track.name.raw === 'string') {
+      return track.name.raw.split('\n', 1)[0]!.trim();
+    }
+  }
+  return 'Unknown track';
+}
+
+function artistGridTrackYear(track: ArtistGridTrack): number | null {
+  for (const value of [track.file_date, track.leak_date]) {
+    if (typeof value !== 'string') continue;
+    const match = /\b(?:19|20)\d{2}\b/.exec(value);
+    if (match) return Number(match[0]);
+  }
+  return null;
+}
+
+function httpUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function uniqueItems(items: TrackerImportItem[]): TrackerImportItem[] {
+  const seen = new Set<string>();
+  return items
+    .filter((item) => {
+      if (seen.has(item.url)) return false;
+      seen.add(item.url);
+      return true;
+    })
+    .slice(0, MAX_TRACKER_LINKS);
+}
+
+function artistGridEraItems(payload: unknown, source: TrackerSheet): TrackerImportItem[] {
   if (!payload || typeof payload !== 'object' || !source.eraName) return [];
-  const data = payload as { eras?: unknown; tracks?: unknown };
+  const data = payload as { eras?: unknown; name?: unknown; tracks?: unknown };
   const wantedEra = normalizedLabel(source.eraName);
   let tracks: ArtistGridTrack[] = [];
   let eraNames: string[] = [];
+  let coverUrl: string | null = null;
 
   if (Array.isArray(data.eras)) {
     const eras = data.eras.filter(
@@ -216,7 +279,10 @@ function artistGridEraLinks(payload: unknown, source: TrackerSheet): string[] {
     eraNames = eras.flatMap((era) => (typeof era.name === 'string' ? [era.name] : []));
     tracks = eras
       .filter((era) => typeof era.name === 'string' && normalizedLabel(era.name) === wantedEra)
-      .flatMap((era) => (Array.isArray(era.tracks) ? (era.tracks as ArtistGridTrack[]) : []));
+      .flatMap((era) => {
+        coverUrl ??= httpUrl(era.cover_art);
+        return Array.isArray(era.tracks) ? (era.tracks as ArtistGridTrack[]) : [];
+      });
   } else if (Array.isArray(data.tracks)) {
     const flatTracks = data.tracks as ArtistGridTrack[];
     eraNames = [
@@ -259,7 +325,28 @@ function artistGridEraLinks(payload: unknown, source: TrackerSheet): string[] {
     }
   }
 
-  return uniqueLinks(tracks.flatMap(artistGridTrackLinks));
+  const trackerArtist =
+    typeof data.name === 'string' ? data.name.replace(/\s+Tracker.*$/i, '').trim() : null;
+  const artist = source.artistName ?? trackerArtist;
+  return uniqueItems(
+    tracks.flatMap((track) => {
+      const url = artistGridTrackUrl(track);
+      return url
+        ? [
+            {
+              url,
+              metadata: {
+                title: artistGridTrackTitle(track),
+                artist,
+                album: source.eraName,
+                year: artistGridTrackYear(track),
+                coverUrl,
+              },
+            },
+          ]
+        : [];
+    }),
+  );
 }
 
 function isSignInResponse(res: Response, body: string): boolean {
@@ -269,17 +356,17 @@ function isSignInResponse(res: Response, body: string): boolean {
   );
 }
 
-/** Fetches public TrackerHub rows and extracts their source-media links. */
-export async function trackerhubMediaUrls(input: string): Promise<string[]> {
+/** Fetches public TrackerHub rows with optional ArtistGrid metadata. */
+export async function trackerhubImportItems(input: string): Promise<TrackerImportItem[]> {
   const source = trackerSheet(input);
   if (!source) throw new Error('Not a supported TrackerHub or Google Sheets URL');
 
   if (source.artistGrid && source.eraName) {
-    const links = artistGridEraLinks(await artistGridPayload(source), source);
-    if (links.length === 0) {
+    const items = artistGridEraItems(await artistGridPayload(source), source);
+    if (items.length === 0) {
       throw new Error(`No playable media links were found in “${source.eraName}”`);
     }
-    return links;
+    return items;
   }
 
   let gid = source.gid;
@@ -317,7 +404,7 @@ export async function trackerhubMediaUrls(input: string): Promise<string[]> {
     !/^\s*<!doctype html|^\s*<html/i.test(csv)
   ) {
     const links = csvLinks(csv);
-    if (links.length > 0) return links;
+    if (links.length > 0) return links.map((url) => ({ url }));
   }
 
   const htmlResponse = await fetch(trackerhubHtmlUrl(source, gid), {
@@ -337,5 +424,10 @@ export async function trackerhubMediaUrls(input: string): Promise<string[]> {
 
   const links = htmlLinks(html);
   if (links.length === 0) throw new Error('No media links were found in this TrackerHub sheet');
-  return links;
+  return links.map((url) => ({ url }));
+}
+
+/** Fetches only the media URLs for callers that do not need tracker metadata. */
+export async function trackerhubMediaUrls(input: string): Promise<string[]> {
+  return (await trackerhubImportItems(input)).map((item) => item.url);
 }

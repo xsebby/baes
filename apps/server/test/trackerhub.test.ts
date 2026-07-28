@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { trackerhubCsvUrl, trackerhubMediaUrls } from '../src/ingest/trackerhub.js';
+import {
+  trackerhubCsvUrl,
+  trackerhubImportItems,
+  trackerhubMediaUrls,
+} from '../src/ingest/trackerhub.js';
 
 describe('TrackerHub import', () => {
   afterEach(() => {
@@ -106,6 +110,8 @@ describe('TrackerHub import', () => {
   it('imports one ArtistGrid era with optional quality filters and more than 50 tracks', async () => {
     const id = '1ivoRJskby8zykhH_szifY4a1HIQCTnVh6c2WfIfMbkM';
     const matchingTracks = Array.from({ length: 99 }, (_, index) => ({
+      name: { title: `Song ${index + 1}` },
+      file_date: index === 0 ? 'Jun 2, 2018' : null,
       quality: index % 2 === 0 ? 'CD Quality' : 'High Quality',
       links: [
         { url: `https://pillows.su/f/${String(index).padStart(32, '0')}` },
@@ -114,9 +120,11 @@ describe('TrackerHub import', () => {
     }));
     const mockedFetch = vi.fn(async () =>
       Response.json({
+        name: 'Playboi Carti Tracker [MAIN]',
         eras: [
           {
             name: 'Whole Lotta Red [V1]',
+            cover_art: 'https://example.com/wlr-v1.jpg',
             tracks: [
               ...matchingTracks,
               {
@@ -134,11 +142,19 @@ describe('TrackerHub import', () => {
       `https://artistgrid.cx/sh/${id}/main?artist=Playboi%20Carti` +
       '&era=Whole%20Lotta%20Red%20%5BV1%5D' +
       '&quality=CD%20Quality&quality=High%20Quality';
-    const links = await trackerhubMediaUrls(url);
+    const items = await trackerhubImportItems(url);
+    const links = items.map((item) => item.url);
 
     expect(links).toHaveLength(99);
     expect(links[0]).toBe('https://pillows.su/f/00000000000000000000000000000000');
     expect(links).not.toContain('https://pillows.su/f/low-quality-track');
+    expect(items[0]?.metadata).toEqual({
+      title: 'Song 1',
+      artist: 'Playboi Carti',
+      album: 'Whole Lotta Red [V1]',
+      year: 2018,
+      coverUrl: 'https://example.com/wlr-v1.jpg',
+    });
     expect(mockedFetch).toHaveBeenCalledWith(
       `https://trackerapi.artistgrid.cx/sh/${id}/tab/main`,
       expect.objectContaining({ headers: { accept: 'application/json' } }),

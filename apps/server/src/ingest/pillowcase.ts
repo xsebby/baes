@@ -118,7 +118,9 @@ export async function downloadPillowcaseFile(fileId: string, uploadsDir: string)
   const mimeType = res.headers.get('content-type')?.split(';', 1)[0]?.toLowerCase();
   const fromPage = fromHeader ? null : await filenameFromPillowcasePage(fileId);
   const sourceName = fromHeader ?? fromPage;
-  const extension = sourceName ? path.extname(sourceName).toLowerCase() : MIME_EXTENSIONS[mimeType ?? ''];
+  const extension = sourceName
+    ? path.extname(sourceName).toLowerCase()
+    : MIME_EXTENSIONS[mimeType ?? ''];
   if (!extension || !AUDIO_EXTENSIONS.has(extension)) {
     throw new Error('The Pillowcase file is not a supported audio format');
   }

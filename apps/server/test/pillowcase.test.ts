@@ -22,13 +22,14 @@ describe('Pillowcase import', () => {
   it('downloads the audio bytes from Pillowcase’s download endpoint', async () => {
     const uploadsDir = await mkdtemp(path.join(tmpdir(), 'baes-pillowcase-'));
     const contents = Buffer.from('audio-bytes');
-    const mockedFetch = vi.fn(async () =>
-      new Response(contents, {
-        headers: {
-          'content-disposition': 'attachment; filename="Artist - Song.mp3"',
-          'content-type': 'audio/mpeg',
-        },
-      }),
+    const mockedFetch = vi.fn(
+      async () =>
+        new Response(contents, {
+          headers: {
+            'content-disposition': 'attachment; filename="Artist - Song.mp3"',
+            'content-type': 'audio/mpeg',
+          },
+        }),
     );
     vi.stubGlobal('fetch', mockedFetch);
 
@@ -50,8 +51,12 @@ describe('Pillowcase import', () => {
     const contents = Buffer.from('audio-bytes');
     const mockedFetch = vi
       .fn()
-      .mockResolvedValueOnce(new Response(contents, { headers: { 'content-type': 'application/octet-stream' } }))
-      .mockResolvedValueOnce(new Response('<script>filename:"Fallback Song.flac",cover:null</script>'));
+      .mockResolvedValueOnce(
+        new Response(contents, { headers: { 'content-type': 'application/octet-stream' } }),
+      )
+      .mockResolvedValueOnce(
+        new Response('<script>filename:"Fallback Song.flac",cover:null</script>'),
+      );
     vi.stubGlobal('fetch', mockedFetch);
 
     try {

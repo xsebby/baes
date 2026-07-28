@@ -83,11 +83,20 @@ export function Login() {
 
 // ---- library (segments) ----
 
-type Segment = 'songs' | 'albums' | 'artists' | 'playlists';
+export type Segment = 'songs' | 'albums' | 'artists' | 'playlists';
 
-export function LibraryView({ navigate, onAddToPlaylist, query }: ViewProps & { query: string }) {
+export function LibraryView({
+  navigate,
+  onAddToPlaylist,
+  query,
+  segment,
+  setSegment,
+}: ViewProps & {
+  query: string;
+  segment: Segment;
+  setSegment: (s: Segment) => void;
+}) {
   const { client } = useAuth();
-  const [segment, setSegment] = useState<Segment>('songs');
   const [tracks, setTracks] = useState<Track[]>([]);
   const [albums, setAlbums] = useState<AlbumSummary[]>([]);
   const [artists, setArtists] = useState<ArtistSummary[]>([]);

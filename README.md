@@ -1,6 +1,7 @@
 # baes
 
-Self-hosted music streaming for unreleased tracks and local files, with Spotify library mirroring. 
+Self-hosted music streaming for unreleased tracks and local files, with Spotify library mirroring.
+
 ## Layout
 
 - `apps/server` — Fastify API (auth, library, streaming, sync)

@@ -13,6 +13,7 @@ import {
   LibraryView,
   Login,
   PlaylistView,
+  type Segment,
   type View,
 } from './views';
 
@@ -24,6 +25,8 @@ function Main() {
   }, []);
   const [view, setView] = useState<View>({ type: 'library' });
   const [query, setQuery] = useState('');
+  // Owned here so returning from a detail view keeps the tab you were on.
+  const [segment, setSegment] = useState<Segment>('songs');
   const [modalTrack, setModalTrack] = useState<Track | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
@@ -56,7 +59,9 @@ function Main() {
         )}
       </div>
 
-      {view.type === 'library' && <LibraryView {...common} query={query} />}
+      {view.type === 'library' && (
+        <LibraryView {...common} query={query} segment={segment} setSegment={setSegment} />
+      )}
       {view.type === 'album' && <AlbumView {...common} id={view.id} />}
       {view.type === 'artist' && <ArtistView {...common} id={view.id} />}
       {view.type === 'playlist' && <PlaylistView {...common} id={view.id} />}

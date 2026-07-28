@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  artistGridEraOptions,
   trackerhubCsvUrl,
   trackerhubImportItems,
   trackerhubMediaUrls,
@@ -213,6 +214,65 @@ describe('TrackerHub import', () => {
         url: 'https://pillows.su/f/abc123def456',
         metadata: expect.objectContaining({ album: 'MUSIC [V3]' }),
       }),
+    ]);
+  });
+
+  it('lists clean selectable era names and playable counts', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          eras: [
+            {
+              name: 'Whole Lotta Red (Deluxe)',
+              tracks: [
+                {
+                  quality: 'CD Quality',
+                  links: [{ url: 'https://pillows.su/f/deluxe-playable' }],
+                },
+                { quality: 'Not Available', links: [] },
+              ],
+            },
+            {
+              name: 'was',
+              cover_art: 'https://example.com/music-v1.jpg',
+              tracks: [
+                {
+                  era: 'MUSIC [V1]',
+                  quality: 'CD Quality',
+                  links: [{ url: 'https://pillows.su/f/music-v1-playable' }],
+                },
+                {
+                  era: 'MUSIC [V1]',
+                  quality: 'Low Quality',
+                  links: [{ url: 'https://pillows.su/f/music-v1-low' }],
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+
+    await expect(
+      artistGridEraOptions(
+        'https://artistgrid.cx/sh/1ivoRJskby8zykhH_szifY4a1HIQCTnVh6c2WfIfMbkM/main?quality=CD%20Quality',
+      ),
+    ).resolves.toEqual([
+      {
+        name: 'Whole Lotta Red (Deluxe)',
+        totalTracks: 2,
+        playableTracks: 1,
+        qualities: ['CD Quality'],
+        coverUrl: null,
+      },
+      {
+        name: 'MUSIC [V1]',
+        totalTracks: 2,
+        playableTracks: 1,
+        qualities: ['CD Quality'],
+        coverUrl: 'https://example.com/music-v1.jpg',
+      },
     ]);
   });
 

@@ -45,6 +45,14 @@ export interface TrackerImportItem {
   metadata?: TrackerImportMetadata;
 }
 
+export interface TrackerEraOption {
+  name: string;
+  totalTracks: number;
+  playableTracks: number;
+  qualities: string[];
+  coverUrl: string | null;
+}
+
 function listParams(url: URL, name: string): string[] {
   return url.searchParams
     .getAll(name)
@@ -213,6 +221,19 @@ function artistGridEraNames(era: ArtistGridEra): string[] {
   ];
 }
 
+function artistGridEraDisplayName(era: ArtistGridEra): string | null {
+  const tracks = Array.isArray(era.tracks) ? (era.tracks as ArtistGridTrack[]) : [];
+  const trackEraNames = [
+    ...new Set(
+      tracks.flatMap((track) =>
+        typeof track.era === 'string' && track.era.trim() ? [track.era.trim()] : [],
+      ),
+    ),
+  ];
+  if (trackEraNames.length === 1) return trackEraNames[0]!;
+  return typeof era.name === 'string' && era.name.trim() ? era.name.trim() : null;
+}
+
 function artistGridTrackUrl(track: ArtistGridTrack): string | null {
   if (!Array.isArray(track.links)) return null;
   for (const link of track.links) {
@@ -271,6 +292,66 @@ function uniqueItems(items: TrackerImportItem[]): TrackerImportItem[] {
       return true;
     })
     .slice(0, MAX_TRACKER_LINKS);
+}
+
+/** Lists the downloadable eras for an ArtistGrid URL that does not select one yet. */
+export async function artistGridEraOptions(input: string): Promise<TrackerEraOption[] | null> {
+  const source = trackerSheet(input);
+  if (!source?.artistGrid || source.eraName) return null;
+
+  const payload = await artistGridPayload(source);
+  if (
+    !payload ||
+    typeof payload !== 'object' ||
+    !('eras' in payload) ||
+    !Array.isArray(payload.eras)
+  ) {
+    throw new Error('ArtistGrid did not return an era list for this tracker');
+  }
+
+  const wantedQualities = source.qualities.map(normalizedLabel);
+  const options = payload.eras.flatMap((value): TrackerEraOption[] => {
+    if (!value || typeof value !== 'object') return [];
+    const era = value as ArtistGridEra;
+    const name = artistGridEraDisplayName(era);
+    const tracks = Array.isArray(era.tracks) ? (era.tracks as ArtistGridTrack[]) : [];
+    if (!name || tracks.length === 0) return [];
+    const eligibleTracks =
+      wantedQualities.length === 0
+        ? tracks
+        : tracks.filter(
+            (track) =>
+              typeof track.quality === 'string' &&
+              wantedQualities.some((quality) =>
+                normalizedLabel(track.quality as string).includes(quality),
+              ),
+          );
+    return [
+      {
+        name,
+        totalTracks: tracks.length,
+        playableTracks: eligibleTracks.filter((track) => artistGridTrackUrl(track)).length,
+        qualities: [
+          ...new Set(
+            eligibleTracks.flatMap((track) =>
+              typeof track.quality === 'string' && track.quality.trim()
+                ? [track.quality.trim()]
+                : [],
+            ),
+          ),
+        ],
+        coverUrl: httpUrl(era.cover_art),
+      },
+    ];
+  });
+
+  const seen = new Set<string>();
+  return options.filter((option) => {
+    const key = normalizedLabel(option.name);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function artistGridEraItems(payload: unknown, source: TrackerSheet): TrackerImportItem[] {

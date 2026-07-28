@@ -20,6 +20,7 @@ import {
 } from '../ingest/pillowcase.js';
 import { embedAudioMetadata } from '../ingest/audio-metadata.js';
 import {
+  artistGridEraOptions,
   trackerhubCsvUrl,
   trackerhubImportItems,
   type TrackerImportItem,
@@ -472,8 +473,12 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
     }
 
     try {
+      const eras = await artistGridEraOptions(body.data.url);
+      if (eras) return { kind: 'eras', eras };
+
       const items = await trackerhubImportItems(body.data.url);
       return {
+        kind: 'tracks',
         items: items.map((item) => ({
           id: selectionId(item),
           title: previewTitle(item),

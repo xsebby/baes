@@ -173,6 +173,50 @@ describe('duplicates & delete', () => {
 });
 
 describe('url import', () => {
+  it('previews ArtistGrid eras before tracks when the URL has no era selector', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          eras: [
+            {
+              name: 'was',
+              tracks: [
+                {
+                  era: 'BABY BOI',
+                  quality: 'CD Quality',
+                  links: [{ url: 'https://pillows.su/f/33333333333333333333333333333333' }],
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/import-url/preview',
+      headers: auth(),
+      payload: {
+        url: 'https://artistgrid.cx/sh/1ivoRJskby8zykhH_szifY4a1HIQCTnVh6c2WfIfMbkM/main?artist=Playboi%20Carti',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      kind: 'eras',
+      eras: [
+        expect.objectContaining({
+          name: 'BABY BOI',
+          totalTracks: 1,
+          playableTracks: 1,
+        }),
+      ],
+    });
+    expect(JSON.stringify(res.json())).not.toContain('pillows.su');
+  });
+
   it('previews selectable ArtistGrid tracks without exposing their download URLs', async () => {
     vi.stubGlobal(
       'fetch',
@@ -213,6 +257,7 @@ describe('url import', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    expect(res.json().kind).toBe('tracks');
     expect(res.json().items).toEqual([
       expect.objectContaining({
         id: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),

@@ -14,7 +14,7 @@ import type {
   PlaylistSummary,
   RedeemInviteRequest,
   ImportJob,
-  ImportPreviewItem,
+  ImportPreviewResponse,
   ScanStatus,
   SpotifyStatus,
   TrackPatch,
@@ -240,7 +240,7 @@ export class ApiClient {
     return this.request('DELETE', `/api/tracks/${id}`);
   }
 
-  previewImportUrl(url: string): Promise<{ items: ImportPreviewItem[] }> {
+  previewImportUrl(url: string): Promise<ImportPreviewResponse> {
     return this.request('POST', '/api/import-url/preview', { url });
   }
 

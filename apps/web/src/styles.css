@@ -508,6 +508,53 @@ input {
   overflow-y: auto;
   border-block: 1px solid var(--panel-2);
 }
+.era-picker-list {
+  margin-top: 2px;
+}
+.import-era-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  color: var(--text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--panel-2), transparent 30%);
+  cursor: pointer;
+}
+.import-era-option:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+.import-era-option:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.import-era-art {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  background: var(--panel-2);
+  color: var(--muted);
+  overflow: hidden;
+}
+.import-era-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.import-era-arrow {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 24px;
+}
 .import-track-option {
   display: flex;
   align-items: center;

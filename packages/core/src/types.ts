@@ -178,6 +178,17 @@ export interface ImportPreviewItem {
   sourceHost: string;
 }
 
+export interface ImportEraPreviewItem {
+  name: string;
+  totalTracks: number;
+  playableTracks: number;
+  qualities: string[];
+  coverUrl: string | null;
+}
+
+export type ImportPreviewResponse =
+  { kind: 'eras'; eras: ImportEraPreviewItem[] } | { kind: 'tracks'; items: ImportPreviewItem[] };
+
 export interface TrackPatch {
   title?: string;
   artistName?: string | null;

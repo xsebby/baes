@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
+  ImportEraPreviewItem,
   ImportJob,
   ImportPreviewItem,
   SpotifyStatus,
@@ -876,9 +877,15 @@ function IngestSection() {
   const [busy, setBusy] = useState(false);
   const [url, setUrl] = useState('');
   const [jobs, setJobs] = useState<ImportJob[]>([]);
+  const [eraPreview, setEraPreview] = useState<{
+    url: string;
+    eras: ImportEraPreviewItem[];
+  } | null>(null);
   const [preview, setPreview] = useState<{ url: string; items: ImportPreviewItem[] } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pickerSearch, setPickerSearch] = useState('');
+  const [eraSearch, setEraSearch] = useState('');
+  const [loadingEra, setLoadingEra] = useState<string | null>(null);
   const [importBusy, setImportBusy] = useState(false);
 
   const refreshJobs = useCallback(() => {
@@ -926,9 +933,14 @@ function IngestSection() {
         (parsed.hostname === 'docs.google.com' && parsed.pathname.includes('/spreadsheets/'));
       if (isTracker) {
         const result = await client.previewImportUrl(importUrl);
-        setPreview({ url: importUrl, items: result.items });
-        setSelectedIds(new Set(result.items.map((item) => item.id)));
-        setPickerSearch('');
+        if (result.kind === 'eras') {
+          setEraPreview({ url: importUrl, eras: result.eras });
+          setEraSearch('');
+        } else {
+          setPreview({ url: importUrl, items: result.items });
+          setSelectedIds(new Set(result.items.map((item) => item.id)));
+          setPickerSearch('');
+        }
       } else {
         await client.importUrl(importUrl);
         setUrl('');
@@ -938,6 +950,28 @@ function IngestSection() {
       setUploadMsg(e instanceof Error ? e.message : 'Import failed');
     } finally {
       setImportBusy(false);
+    }
+  }
+
+  async function chooseEra(name: string) {
+    if (!eraPreview) return;
+    setImportBusy(true);
+    setLoadingEra(name);
+    setUploadMsg(null);
+    try {
+      const eraUrl = new URL(eraPreview.url);
+      eraUrl.searchParams.set('era', name);
+      const result = await client.previewImportUrl(eraUrl.toString());
+      if (result.kind !== 'tracks') throw new Error('ArtistGrid did not return the era’s songs');
+      setPreview({ url: eraUrl.toString(), items: result.items });
+      setSelectedIds(new Set(result.items.map((item) => item.id)));
+      setPickerSearch('');
+      setEraPreview(null);
+    } catch (e) {
+      setUploadMsg(e instanceof Error ? e.message : 'Could not load this era');
+    } finally {
+      setImportBusy(false);
+      setLoadingEra(null);
     }
   }
 
@@ -968,6 +1002,12 @@ function IngestSection() {
           .some((value) => String(value).toLocaleLowerCase().includes(query))
       );
     }) ?? [];
+  const filteredEras =
+    eraPreview?.eras.filter(
+      (era) =>
+        !eraSearch.trim() ||
+        era.name.toLocaleLowerCase().includes(eraSearch.trim().toLocaleLowerCase()),
+    ) ?? [];
 
   return (
     <>
@@ -1030,6 +1070,75 @@ function IngestSection() {
           {j.error && <span style={{ color: 'var(--danger)' }}> — {j.error}</span>}
         </div>
       ))}
+      {eraPreview && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !importBusy) setEraPreview(null);
+          }}
+        >
+          <div className="modal import-picker" role="dialog" aria-modal="true">
+            <div className="import-picker-heading">
+              <div>
+                <h3>Choose an era</h3>
+                <div className="muted small">{eraPreview.eras.length} eras available</div>
+              </div>
+              <button className="iconbtn" disabled={importBusy} onClick={() => setEraPreview(null)}>
+                ✕
+              </button>
+            </div>
+            <input
+              autoFocus
+              className="import-picker-search"
+              placeholder="Search eras"
+              value={eraSearch}
+              onChange={(event) => setEraSearch(event.target.value)}
+            />
+            <div className="import-picker-list era-picker-list">
+              {filteredEras.map((era) => (
+                <button
+                  className="import-era-option"
+                  key={era.name}
+                  disabled={importBusy || era.playableTracks === 0}
+                  onClick={() => chooseEra(era.name)}
+                >
+                  <span className="import-era-art">
+                    <span>♪</span>
+                    {era.coverUrl && (
+                      <img
+                        src={era.coverUrl}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={(event) => {
+                          event.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    )}
+                  </span>
+                  <span className="import-track-copy">
+                    <span className="import-track-title">{era.name}</span>
+                    <span className="muted small">
+                      {loadingEra === era.name
+                        ? 'Loading songs…'
+                        : `${era.playableTracks} playable · ${era.totalTracks} total`}
+                    </span>
+                  </span>
+                  <span className="import-era-arrow">›</span>
+                </button>
+              ))}
+              {filteredEras.length === 0 && (
+                <div className="muted small import-picker-empty">No matching eras</div>
+              )}
+            </div>
+            <div className="import-picker-footer">
+              <button className="iconbtn" disabled={importBusy} onClick={() => setEraPreview(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {preview && (
         <div
           className="modal-backdrop"

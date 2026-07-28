@@ -37,6 +37,7 @@ export interface TrackerImportMetadata {
   album: string | null;
   year: number | null;
   coverUrl: string | null;
+  quality?: string | null;
 }
 
 export interface TrackerImportItem {
@@ -341,6 +342,7 @@ function artistGridEraItems(payload: unknown, source: TrackerSheet): TrackerImpo
                 album: source.eraName,
                 year: artistGridTrackYear(track),
                 coverUrl,
+                quality: typeof track.quality === 'string' ? track.quality.trim() || null : null,
               },
             },
           ]

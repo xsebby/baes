@@ -473,6 +473,83 @@ input {
   color: var(--text);
   margin-bottom: 10px;
 }
+.modal.import-picker {
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(780px, calc(100vh - 48px));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.import-picker-heading,
+.import-picker-actions,
+.import-picker-footer {
+  display: flex;
+  align-items: center;
+}
+.import-picker-heading {
+  justify-content: space-between;
+  gap: 16px;
+}
+.import-picker-heading h3 {
+  margin-bottom: 2px;
+}
+.import-picker-heading .iconbtn {
+  flex: 0 0 auto;
+}
+.modal .import-picker-search {
+  margin: 16px 0 8px;
+}
+.import-picker-actions {
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.import-picker-list {
+  min-height: 120px;
+  overflow-y: auto;
+  border-block: 1px solid var(--panel-2);
+}
+.import-track-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid color-mix(in srgb, var(--panel-2), transparent 30%);
+}
+.import-track-option:hover {
+  background: var(--panel-2);
+}
+.modal .import-track-option input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.import-track-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.import-track-copy > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.import-track-title {
+  font-weight: 600;
+}
+.import-picker-empty {
+  padding: 36px 8px;
+  text-align: center;
+}
+.import-picker-footer {
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 14px;
+}
 .muted {
   color: var(--muted);
 }

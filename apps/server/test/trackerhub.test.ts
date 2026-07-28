@@ -154,6 +154,7 @@ describe('TrackerHub import', () => {
       album: 'Whole Lotta Red [V1]',
       year: 2018,
       coverUrl: 'https://example.com/wlr-v1.jpg',
+      quality: 'CD Quality',
     });
     expect(mockedFetch).toHaveBeenCalledWith(
       `https://trackerapi.artistgrid.cx/sh/${id}/tab/main`,

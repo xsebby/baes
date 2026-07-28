@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { loadConfig } from '../src/config.js';
 import { buildApp } from '../src/app.js';
@@ -58,6 +58,10 @@ afterAll(async () => {
   await app.close();
   await rm(musicDir, { recursive: true, force: true });
   await rm(dataDir, { recursive: true, force: true });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('upload', () => {
@@ -169,6 +173,63 @@ describe('duplicates & delete', () => {
 });
 
 describe('url import', () => {
+  it('previews selectable ArtistGrid tracks without exposing their download URLs', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          name: 'Playboi Carti Tracker [MAIN]',
+          eras: [
+            {
+              name: 'Whole Lotta Red [V1]',
+              tracks: [
+                {
+                  name: { title: 'Buffie The Body [V1]' },
+                  quality: 'High Quality',
+                  links: [{ url: 'https://pillows.su/f/11111111111111111111111111111111' }],
+                },
+                {
+                  name: { title: 'Back Up [V1]' },
+                  quality: 'CD Quality',
+                  links: [{ url: 'https://pillows.su/f/22222222222222222222222222222222' }],
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/import-url/preview',
+      headers: auth(),
+      payload: {
+        url:
+          'https://artistgrid.cx/sh/1ivoRJskby8zykhH_szifY4a1HIQCTnVh6c2WfIfMbkM/main' +
+          '?artist=Playboi%20Carti&era=Whole%20Lotta%20Red%20%5BV1%5D' +
+          '&quality=CD%20Quality&quality=High%20Quality',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().items).toEqual([
+      expect.objectContaining({
+        id: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
+        title: 'Buffie The Body [V1]',
+        artist: 'Playboi Carti',
+        album: 'Whole Lotta Red [V1]',
+        quality: 'High Quality',
+        sourceHost: 'pillows.su',
+      }),
+      expect.objectContaining({
+        title: 'Back Up [V1]',
+        quality: 'CD Quality',
+      }),
+    ]);
+    expect(JSON.stringify(res.json())).not.toContain('https://pillows.su');
+  });
+
   it('records a job (errors gracefully without yt-dlp or network)', async () => {
     const res = await app.inject({
       method: 'POST',

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { mkdir, stat, unlink } from 'node:fs/promises';
@@ -324,7 +324,28 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
 
   const jobs: ImportJob[] = [];
 
-  const importSchema = z.object({ url: z.string().url() });
+  const previewImportSchema = z.object({ url: z.string().url() });
+  const importSchema = previewImportSchema.extend({
+    selectedIds: z
+      .array(z.string().regex(/^[A-Za-z0-9_-]{32,64}$/))
+      .min(1)
+      .max(250)
+      .optional(),
+  });
+
+  function selectionId(item: TrackerImportItem): string {
+    return createHash('sha256').update(item.url).digest('base64url');
+  }
+
+  function previewTitle(item: TrackerImportItem): string {
+    if (item.metadata?.title) return item.metadata.title;
+    try {
+      const filename = path.basename(new URL(item.url).pathname);
+      return filename ? decodeURIComponent(filename) : 'Untitled track';
+    } catch {
+      return 'Untitled track';
+    }
+  }
 
   function addJob(url: string): ImportJob {
     const job: ImportJob = {
@@ -438,6 +459,39 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
     return { succeeded, failed };
   }
 
+  app.post('/api/import-url/preview', { preHandler: app.requireOwner }, async (req, reply) => {
+    const body = previewImportSchema.safeParse(req.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: 'invalid_request', message: body.error.message });
+    }
+    if (!trackerhubCsvUrl(body.data.url)) {
+      return reply.code(400).send({
+        error: 'invalid_request',
+        message: 'Song selection is available for ArtistGrid and TrackerHub links',
+      });
+    }
+
+    try {
+      const items = await trackerhubImportItems(body.data.url);
+      return {
+        items: items.map((item) => ({
+          id: selectionId(item),
+          title: previewTitle(item),
+          artist: item.metadata?.artist ?? null,
+          album: item.metadata?.album ?? null,
+          year: item.metadata?.year ?? null,
+          quality: item.metadata?.quality ?? null,
+          sourceHost: new URL(item.url).hostname,
+        })),
+      };
+    } catch (err) {
+      return reply.code(422).send({
+        error: 'preview_failed',
+        message: err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300),
+      });
+    }
+  });
+
   app.post('/api/import-url', { preHandler: app.requireOwner }, async (req, reply) => {
     const body = importSchema.safeParse(req.body);
     if (!body.success) {
@@ -445,14 +499,34 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
     }
     await ensureUploadsRoot();
 
+    const trackerImport = Boolean(trackerhubCsvUrl(body.data.url));
+    if (body.data.selectedIds && !trackerImport) {
+      return reply.code(400).send({
+        error: 'invalid_request',
+        message: 'Song selection is only available for ArtistGrid and TrackerHub links',
+      });
+    }
+
     const job = addJob(body.data.url);
-    if (trackerhubCsvUrl(body.data.url)) {
+    if (trackerImport) {
       void trackerhubImportItems(body.data.url)
         .then(async (items) => {
-          const result = await startImportBatch(items);
+          let selectedItems = items;
+          if (body.data.selectedIds) {
+            const wanted = new Set(body.data.selectedIds);
+            selectedItems = items.filter((item) => wanted.has(selectionId(item)));
+            const matched = new Set(selectedItems.map(selectionId));
+            const missing = [...wanted].filter((id) => !matched.has(id));
+            if (missing.length > 0) {
+              throw new Error(
+                'The ArtistGrid list changed after the preview. Reopen the song picker and try again.',
+              );
+            }
+          }
+          const result = await startImportBatch(selectedItems);
           if (result.failed > 0) {
             job.status = 'error';
-            job.error = `${result.failed} of ${items.length} tracks failed to import; ${result.succeeded} succeeded`;
+            job.error = `${result.failed} of ${selectedItems.length} tracks failed to import; ${result.succeeded} succeeded`;
           } else {
             job.status = 'done';
           }

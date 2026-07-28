@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   ImportJob,
+  ImportPreviewItem,
   SpotifyStatus,
   AlbumDetail,
   AlbumSummary,
@@ -875,6 +876,10 @@ function IngestSection() {
   const [busy, setBusy] = useState(false);
   const [url, setUrl] = useState('');
   const [jobs, setJobs] = useState<ImportJob[]>([]);
+  const [preview, setPreview] = useState<{ url: string; items: ImportPreviewItem[] } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pickerSearch, setPickerSearch] = useState('');
+  const [importBusy, setImportBusy] = useState(false);
 
   const refreshJobs = useCallback(() => {
     client
@@ -910,14 +915,59 @@ function IngestSection() {
 
   async function startImport() {
     if (!url.trim()) return;
+    const importUrl = url.trim();
+    setImportBusy(true);
+    setUploadMsg(null);
     try {
-      await client.importUrl(url.trim());
+      const parsed = new URL(importUrl);
+      const isTracker =
+        parsed.hostname === 'artistgrid.cx' ||
+        parsed.hostname === 'www.artistgrid.cx' ||
+        (parsed.hostname === 'docs.google.com' && parsed.pathname.includes('/spreadsheets/'));
+      if (isTracker) {
+        const result = await client.previewImportUrl(importUrl);
+        setPreview({ url: importUrl, items: result.items });
+        setSelectedIds(new Set(result.items.map((item) => item.id)));
+        setPickerSearch('');
+      } else {
+        await client.importUrl(importUrl);
+        setUrl('');
+        refreshJobs();
+      }
+    } catch (e) {
+      setUploadMsg(e instanceof Error ? e.message : 'Import failed');
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  async function importSelected() {
+    if (!preview || selectedIds.size === 0) return;
+    setImportBusy(true);
+    setUploadMsg(null);
+    try {
+      await client.importUrl(preview.url, [...selectedIds]);
+      setPreview(null);
+      setSelectedIds(new Set());
       setUrl('');
       refreshJobs();
     } catch (e) {
       setUploadMsg(e instanceof Error ? e.message : 'Import failed');
+    } finally {
+      setImportBusy(false);
     }
   }
+
+  const filteredPreviewItems =
+    preview?.items.filter((item) => {
+      const query = pickerSearch.trim().toLocaleLowerCase();
+      return (
+        !query ||
+        [item.title, item.artist, item.album, item.quality]
+          .filter(Boolean)
+          .some((value) => String(value).toLocaleLowerCase().includes(query))
+      );
+    }) ?? [];
 
   return (
     <>
@@ -958,8 +1008,8 @@ function IngestSection() {
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && startImport()}
         />
-        <button className="primary" onClick={startImport}>
-          Import
+        <button className="primary" disabled={importBusy || !url.trim()} onClick={startImport}>
+          {importBusy ? 'Loading…' : 'Import'}
         </button>
       </div>
       {jobs.slice(0, 5).map((j) => (
@@ -980,6 +1030,89 @@ function IngestSection() {
           {j.error && <span style={{ color: 'var(--danger)' }}> — {j.error}</span>}
         </div>
       ))}
+      {preview && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !importBusy) setPreview(null);
+          }}
+        >
+          <div className="modal import-picker" role="dialog" aria-modal="true">
+            <div className="import-picker-heading">
+              <div>
+                <h3>Choose songs</h3>
+                <div className="muted small">
+                  {selectedIds.size} of {preview.items.length} selected
+                </div>
+              </div>
+              <button className="iconbtn" disabled={importBusy} onClick={() => setPreview(null)}>
+                ✕
+              </button>
+            </div>
+            <input
+              autoFocus
+              className="import-picker-search"
+              placeholder="Search songs"
+              value={pickerSearch}
+              onChange={(event) => setPickerSearch(event.target.value)}
+            />
+            <div className="import-picker-actions">
+              <button
+                className="iconbtn"
+                onClick={() => setSelectedIds(new Set(preview.items.map((item) => item.id)))}
+              >
+                Select all
+              </button>
+              <button className="iconbtn" onClick={() => setSelectedIds(new Set())}>
+                Clear
+              </button>
+            </div>
+            <div className="import-picker-list">
+              {filteredPreviewItems.map((item) => (
+                <label className="import-track-option" key={item.id}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(item.id)}
+                    onChange={() => {
+                      setSelectedIds((current) => {
+                        const next = new Set(current);
+                        if (next.has(item.id)) next.delete(item.id);
+                        else next.add(item.id);
+                        return next;
+                      });
+                    }}
+                  />
+                  <span className="import-track-copy">
+                    <span className="import-track-title">{item.title}</span>
+                    <span className="muted small">
+                      {[item.artist, item.album, item.year, item.quality, item.sourceHost]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  </span>
+                </label>
+              ))}
+              {filteredPreviewItems.length === 0 && (
+                <div className="muted small import-picker-empty">No matching songs</div>
+              )}
+            </div>
+            <div className="import-picker-footer">
+              <button className="iconbtn" disabled={importBusy} onClick={() => setPreview(null)}>
+                Cancel
+              </button>
+              <button
+                className="primary"
+                disabled={importBusy || selectedIds.size === 0}
+                onClick={importSelected}
+              >
+                {importBusy
+                  ? 'Starting…'
+                  : `Download ${selectedIds.size} song${selectedIds.size === 1 ? '' : 's'}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

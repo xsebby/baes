@@ -168,6 +168,16 @@ export interface ImportJob {
   startedAt: string;
 }
 
+export interface ImportPreviewItem {
+  id: string;
+  title: string;
+  artist: string | null;
+  album: string | null;
+  year: number | null;
+  quality: string | null;
+  sourceHost: string;
+}
+
 export interface TrackPatch {
   title?: string;
   artistName?: string | null;

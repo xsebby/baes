@@ -182,6 +182,40 @@ describe('TrackerHub import', () => {
     ).rejects.toThrow('Available eras include: Whole Lotta Red [V1], Whole Lotta Red [V2]');
   });
 
+  it('matches displayed era names when ArtistGrid mislabels the era container', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          eras: [
+            {
+              name: 'vocal',
+              tracks: [
+                {
+                  era: 'MUSIC [V3]',
+                  name: { title: 'Example' },
+                  quality: 'CD Quality',
+                  links: [{ url: 'https://pillows.su/f/abc123def456' }],
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+
+    await expect(
+      trackerhubImportItems(
+        'https://artistgrid.cx/sh/1ivoRJskby8zykhH_szifY4a1HIQCTnVh6c2WfIfMbkM/main?era=MUSIC%20%5BV3%5D',
+      ),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        url: 'https://pillows.su/f/abc123def456',
+        metadata: expect.objectContaining({ album: 'MUSIC [V3]' }),
+      }),
+    ]);
+  });
+
   it('explains when the linked sheet is not publicly exportable', async () => {
     vi.stubGlobal(
       'fetch',

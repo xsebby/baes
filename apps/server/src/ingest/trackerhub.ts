@@ -205,6 +205,14 @@ interface ArtistGridEra {
   tracks?: unknown;
 }
 
+function artistGridEraNames(era: ArtistGridEra): string[] {
+  const tracks = Array.isArray(era.tracks) ? (era.tracks as ArtistGridTrack[]) : [];
+  return [
+    ...(typeof era.name === 'string' ? [era.name] : []),
+    ...tracks.flatMap((track) => (typeof track.era === 'string' ? [track.era] : [])),
+  ];
+}
+
 function artistGridTrackUrl(track: ArtistGridTrack): string | null {
   if (!Array.isArray(track.links)) return null;
   for (const link of track.links) {
@@ -277,9 +285,9 @@ function artistGridEraItems(payload: unknown, source: TrackerSheet): TrackerImpo
     const eras = data.eras.filter(
       (era): era is ArtistGridEra => Boolean(era) && typeof era === 'object',
     );
-    eraNames = eras.flatMap((era) => (typeof era.name === 'string' ? [era.name] : []));
+    eraNames = [...new Set(eras.flatMap(artistGridEraNames))];
     tracks = eras
-      .filter((era) => typeof era.name === 'string' && normalizedLabel(era.name) === wantedEra)
+      .filter((era) => artistGridEraNames(era).some((name) => normalizedLabel(name) === wantedEra))
       .flatMap((era) => {
         coverUrl ??= httpUrl(era.cover_art);
         return Array.isArray(era.tracks) ? (era.tracks as ArtistGridTrack[]) : [];

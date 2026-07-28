@@ -59,10 +59,9 @@ describe('TrackerHub import', () => {
     const mockedFetch = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(
-          'items.push({name: "💿 Unreleased", pageUrl: "...", gid: "0"});' +
-            'items.push({name: "🆕 Recent", pageUrl: "...", gid: "1962169030"});',
-        ),
+        Response.json({
+          tab: { name: '🆕 Recent', slug: 'recent', gid: '1962169030' },
+        }),
       )
       .mockResolvedValueOnce(new Response('Title,Link\nSong,Download'))
       .mockResolvedValueOnce(
@@ -79,6 +78,28 @@ describe('TrackerHub import', () => {
       3,
       'https://docs.google.com/spreadsheets/d/1ivoRJskby8zykhH_szifY4a1HIQCTnVh6c2WfIfMbkM/htmlview/sheet?headers=true&gid=1962169030',
       expect.objectContaining({ headers: { accept: 'text/html' } }),
+    );
+  });
+
+  it('resolves ArtistGrid’s main slug to the Unreleased sheet tab', async () => {
+    const id = '1ivoRJskby8zykhH_szifY4a1HIQCTnVh6c2WfIfMbkM';
+    const mockedFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          tab: { name: '💿 Unreleased', slug: 'main', gid: '0' },
+        }),
+      )
+      .mockResolvedValueOnce(new Response('Title,Link\nSong,https://pillows.su/f/abc123def456'));
+    vi.stubGlobal('fetch', mockedFetch);
+
+    await expect(
+      trackerhubMediaUrls(`https://artistgrid.cx/sh/${id}/main?artist=Playboi%20Carti`),
+    ).resolves.toEqual(['https://pillows.su/f/abc123def456']);
+    expect(mockedFetch).toHaveBeenNthCalledWith(
+      2,
+      `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=0`,
+      expect.objectContaining({ headers: { accept: 'text/csv, text/plain;q=0.9' } }),
     );
   });
 

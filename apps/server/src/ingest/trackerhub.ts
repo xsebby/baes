@@ -96,6 +96,24 @@ function artistGridApiUrl(source: TrackerSheet): string {
   return source.tabName ? `${base}/tab/${encodeURIComponent(source.tabName)}` : `${base}/`;
 }
 
+async function artistGridPayload(source: TrackerSheet): Promise<unknown> {
+  const response = await fetch(artistGridApiUrl(source), {
+    headers: { accept: 'application/json' },
+    signal: AbortSignal.timeout(30 * 1000),
+  });
+  if (!response.ok) {
+    throw new Error(`ArtistGrid could not load this tracker (${response.status})`);
+  }
+  return response.json();
+}
+
+function artistGridTabGid(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object' || !('tab' in payload)) return null;
+  const tab = payload.tab;
+  if (!tab || typeof tab !== 'object' || !('gid' in tab)) return null;
+  return typeof tab.gid === 'string' || typeof tab.gid === 'number' ? String(tab.gid) : null;
+}
+
 function normalizedTabName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -257,14 +275,7 @@ export async function trackerhubMediaUrls(input: string): Promise<string[]> {
   if (!source) throw new Error('Not a supported TrackerHub or Google Sheets URL');
 
   if (source.artistGrid && source.eraName) {
-    const response = await fetch(artistGridApiUrl(source), {
-      headers: { accept: 'application/json' },
-      signal: AbortSignal.timeout(30 * 1000),
-    });
-    if (!response.ok) {
-      throw new Error(`ArtistGrid could not load this tracker (${response.status})`);
-    }
-    const links = artistGridEraLinks(await response.json(), source);
+    const links = artistGridEraLinks(await artistGridPayload(source), source);
     if (links.length === 0) {
       throw new Error(`No playable media links were found in “${source.eraName}”`);
     }
@@ -272,6 +283,14 @@ export async function trackerhubMediaUrls(input: string): Promise<string[]> {
   }
 
   let gid = source.gid;
+  if (!gid && source.artistGrid && source.tabName) {
+    try {
+      gid = artistGridTabGid(await artistGridPayload(source));
+    } catch {
+      // The public Google Sheet remains a useful fallback if ArtistGrid's API
+      // is temporarily unavailable.
+    }
+  }
   if (!gid && source.tabName) {
     const shellResponse = await fetch(trackerhubShellUrl(source), {
       headers: { accept: 'text/html' },

@@ -101,6 +101,23 @@ function AppearanceModal({ onClose }: { onClose: () => void }) {
               onClick={() => update({ accent: a.value })}
             />
           ))}
+          <label
+            className={`swatch${!ACCENTS.some((a) => a.value === theme.accent) ? ' active' : ''}`}
+            title="Custom color"
+            style={{
+              background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)',
+              display: 'inline-block',
+              cursor: 'pointer',
+              overflow: 'hidden',
+            }}
+          >
+            <input
+              type="color"
+              value={theme.accent}
+              style={{ opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
+              onChange={(e) => update({ accent: e.target.value })}
+            />
+          </label>
         </div>
 
         <div className="muted small">Panels</div>

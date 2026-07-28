@@ -17,12 +17,16 @@ interface PlayerState {
   positionSec: number;
   durationSec: number;
   volume: number;
+  rate: number;
+  preservePitch: boolean;
   playTrack: (track: Track, queue?: Track[]) => void;
   toggle: () => void;
   next: () => void;
   previous: () => void;
   seekTo: (sec: number) => void;
   setVolume: (v: number) => void;
+  setRate: (r: number) => void;
+  setPreservePitch: (b: boolean) => void;
 }
 
 const PlayerContext = createContext<PlayerState | null>(null);
@@ -38,6 +42,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [volume, setVolumeState] = useState(
     () => Number(localStorage.getItem('baes.volume') ?? '1') || 1,
   );
+  const [rate, setRateState] = useState(1);
+  const [preservePitch, setPreservePitchState] = useState(true);
 
   // Refs so MediaSession/ended handlers see fresh values without re-binding.
   const currentRef = useRef(current);
@@ -87,6 +93,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const audio = audioRef.current;
     audio.volume = volume;
+    audio.playbackRate = rate;
+    audio.preservesPitch = preservePitch;
     const onTime = () => setPositionSec(audio.currentTime);
     const onDur = () => setDurationSec(audio.duration || 0);
     const onPlay = () => setPlaying(true);
@@ -136,6 +144,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('baes.volume', String(v));
   }, []);
 
+  const setRate = useCallback((r: number) => {
+    audioRef.current.playbackRate = r;
+    setRateState(r);
+  }, []);
+
+  const setPreservePitch = useCallback((b: boolean) => {
+    audioRef.current.preservesPitch = b;
+    setPreservePitchState(b);
+  }, []);
+
   const value = useMemo(
     () => ({
       current,
@@ -144,12 +162,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       positionSec,
       durationSec,
       volume,
+      rate,
+      preservePitch,
       playTrack,
       toggle,
       next: () => skipTo(1),
       previous: () => skipTo(-1),
       seekTo,
       setVolume,
+      setRate,
+      setPreservePitch,
     }),
     [
       current,

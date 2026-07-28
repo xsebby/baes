@@ -192,14 +192,19 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
     positionSec,
     durationSec,
     volume,
+    rate,
+    preservePitch,
     toggle,
     next,
     previous,
     seekTo,
     setVolume,
+    setRate,
+    setPreservePitch,
   } = usePlayer();
   const { likedIds, toggleLike } = useLikes();
   const [dragSec, setDragSec] = useState<number | null>(null);
+  const [showSpeed, setShowSpeed] = useState(false);
 
   if (!current) return null;
   const shown = dragSec ?? positionSec;
@@ -261,6 +266,51 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
       </div>
 
       <div className="right">
+        <div style={{ position: 'relative' }}>
+          <button
+            className="rowbtn"
+            style={{ visibility: 'visible', fontVariantNumeric: 'tabular-nums' }}
+            title="Speed & pitch"
+            onClick={() => setShowSpeed((v) => !v)}
+          >
+            {rate.toFixed(2).replace(/0$/, '')}×
+          </button>
+          {showSpeed && (
+            <div className="speed-pop">
+              <div className="muted small" style={{ marginBottom: 6 }}>
+                Speed {rate.toFixed(2)}×
+              </div>
+              <input
+                type="range"
+                min={0.5}
+                max={1.5}
+                step={0.05}
+                value={rate}
+                onChange={(e) => setRate(Number(e.target.value))}
+              />
+              <div style={{ display: 'flex', gap: 6, margin: '8px 0' }}>
+                {[0.8, 0.9, 1, 1.15, 1.25].map((r) => (
+                  <button
+                    key={r}
+                    className={`opt${rate === r ? ' active' : ''}`}
+                    style={{ padding: '3px 8px', fontSize: 12 }}
+                    onClick={() => setRate(r)}
+                  >
+                    {r}×
+                  </button>
+                ))}
+              </div>
+              <label className="small" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={!preservePitch}
+                  onChange={(e) => setPreservePitch(!e.target.checked)}
+                />
+                Shift pitch with speed (slowed / sped-up)
+              </label>
+            </div>
+          )}
+        </div>
         {onExpand && (
           <button
             className="rowbtn"

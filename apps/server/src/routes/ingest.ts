@@ -8,7 +8,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import multipart from '@fastify/multipart';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { albums, artists, libraryRoots, playlistItems, tracks } from '@baes/db';
+import { albums, artists, libraryRoots, playlistItems, playlists, tracks } from '@baes/db';
 import type { Database } from '../db.js';
 import type { Config } from '../config.js';
 import type { LibraryScanner } from '../library/scanner.js';
@@ -89,6 +89,35 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
 
     if (saved.length > 0) scanner.start();
     return reply.code(201).send({ saved, rejected, scanning: saved.length > 0 });
+  });
+
+  // ---- Playlist cover upload ----
+
+  app.post('/api/playlists/:id/cover', { preHandler: app.requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const [pl] = await db
+      .select({ id: playlists.id })
+      .from(playlists)
+      .where(eq(playlists.id, id))
+      .limit(1);
+    if (!pl) {
+      return reply.code(404).send({ error: 'not_found', message: 'Playlist not found' });
+    }
+    const part = await req.file();
+    if (!part || !/^image\/(jpeg|png|webp)$/.test(part.mimetype)) {
+      return reply
+        .code(400)
+        .send({ error: 'invalid_request', message: 'Send a JPEG, PNG, or WebP image' });
+    }
+    const artDir = path.resolve(config.DATA_DIR, 'art');
+    await mkdir(artDir, { recursive: true });
+    const target = path.join(artDir, `playlist-${id}.jpg`);
+    await pipeline(part.file, createWriteStream(target));
+    await db
+      .update(playlists)
+      .set({ artPath: target, updatedSeq: bumpSeq })
+      .where(eq(playlists.id, id));
+    return reply.code(204).send();
   });
 
   // ---- Track metadata editing ----

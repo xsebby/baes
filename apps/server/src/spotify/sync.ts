@@ -285,6 +285,13 @@ export class SpotifySync {
   }
 
   private async savePlaylistArt(playlistId: string, url: string): Promise<void> {
+    // Never clobber an existing cover — it may be user-uploaded.
+    const [row] = await this.db
+      .select({ artPath: playlists.artPath })
+      .from(playlists)
+      .where(eq(playlists.id, playlistId))
+      .limit(1);
+    if (row?.artPath) return;
     const res = await fetch(url);
     if (!res.ok) return;
     await mkdir(this.artDir, { recursive: true });

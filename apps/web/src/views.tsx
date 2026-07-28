@@ -103,6 +103,8 @@ export function LibraryView({
   const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [editTrack, setEditTrack] = useState<Track | null>(null);
+  const [newPlaylistOpen, setNewPlaylistOpen] = useState(false);
+  const [newPlaylistTitle, setNewPlaylistTitle] = useState('');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(
@@ -200,16 +202,7 @@ export function LibraryView({
               </div>
               <div className="name">Liked songs</div>
             </div>
-            <div
-              className="list-row"
-              onClick={async () => {
-                const title = prompt('New playlist name');
-                if (title?.trim()) {
-                  await client.createPlaylist(title.trim());
-                  void load(query);
-                }
-              }}
-            >
+            <div className="list-row" onClick={() => setNewPlaylistOpen(true)}>
               <div className="bubble" style={{ color: 'var(--accent)' }}>
                 ＋
               </div>
@@ -246,6 +239,44 @@ export function LibraryView({
           onClose={() => setEditTrack(null)}
           onSaved={() => load(query)}
         />
+      )}
+      {newPlaylistOpen && (
+        <div className="modal-backdrop" onClick={() => setNewPlaylistOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>New playlist</h3>
+            <input
+              autoFocus
+              placeholder="Playlist name"
+              value={newPlaylistTitle}
+              onChange={(e) => setNewPlaylistTitle(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter' && newPlaylistTitle.trim()) {
+                  await client.createPlaylist(newPlaylistTitle.trim());
+                  setNewPlaylistTitle('');
+                  setNewPlaylistOpen(false);
+                  void load(query);
+                }
+              }}
+            />
+            <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+              <button
+                className="primary"
+                disabled={!newPlaylistTitle.trim()}
+                onClick={async () => {
+                  await client.createPlaylist(newPlaylistTitle.trim());
+                  setNewPlaylistTitle('');
+                  setNewPlaylistOpen(false);
+                  void load(query);
+                }}
+              >
+                Create
+              </button>
+              <button className="iconbtn" onClick={() => setNewPlaylistOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
@@ -397,6 +428,22 @@ export function PlaylistView({ id, navigate, onAddToPlaylist }: ViewProps & { id
           <div className="sub">{playlist.items.length} tracks</div>
           <div className="actions">
             <PlayAllButton tracks={queue} />
+            <label className="iconbtn" style={{ cursor: 'pointer' }}>
+              Set cover
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style={{ display: 'none' }}
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  const form = new FormData();
+                  form.append('file', f);
+                  await client.uploadPlaylistCover(playlist.id, form);
+                  load();
+                }}
+              />
+            </label>
             <button
               className="iconbtn"
               onClick={async () => {

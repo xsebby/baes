@@ -247,6 +247,20 @@ export class ApiClient {
     return this.request('GET', '/api/import-jobs');
   }
 
+  /** Upload a playlist cover image (browser FormData with a single `file`). */
+  async uploadPlaylistCover(playlistId: string, form: FormData): Promise<void> {
+    const headers: Record<string, string> = {};
+    const token = await this.getToken();
+    if (token) headers.authorization = `Bearer ${token}`;
+    const res = await this.fetchImpl(`${this.baseUrl}/api/playlists/${playlistId}/cover`, {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+    if (!res.ok)
+      throw new ApiError(res.status, 'upload_failed', `Cover upload failed (${res.status})`);
+  }
+
   /** Multipart upload (browser): pass a FormData with one or more `file` parts. */
   async uploadFiles(form: FormData): Promise<{ saved: string[]; rejected: string[] }> {
     const headers: Record<string, string> = {};

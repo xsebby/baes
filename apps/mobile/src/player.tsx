@@ -141,7 +141,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
               albumTitle: track.albumTitle ?? undefined,
               artworkUrl: track.artUrl ? client.mediaUrl(track.artUrl) : undefined,
             },
-            { showSeekBackward: false, showSeekForward: false },
+            // expo-audio exposes no next/prev remote commands, so give the
+            // lock screen its native seek buttons instead of greyed skips.
+            { showSeekBackward: true, showSeekForward: true },
           );
         } catch {
           // older native runtime without lock-screen support — playback still works

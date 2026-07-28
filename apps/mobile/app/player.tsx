@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -132,6 +133,7 @@ export default function NowPlaying() {
           },
         ]}
       />
+      <BlurView intensity={85} tint="dark" pointerEvents="none" style={StyleSheet.absoluteFill} />
       {current.artUrl ? (
         <Image source={{ uri: client.mediaUrl(current.artUrl) }} style={styles.art} />
       ) : (

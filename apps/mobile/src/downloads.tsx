@@ -17,6 +17,8 @@ export interface DownloadEntry {
   fileUri: string;
   bytes: number;
   downloadedAt: string;
+  /** Present when downloaded through the compat pipeline (clean m4a). */
+  compat?: boolean;
 }
 
 interface DownloadsState {
@@ -71,7 +73,18 @@ export function DownloadsProvider({ children }: { children: React.ReactNode }) {
         // Drop entries whose audio file vanished (e.g. OS cleared storage).
         const alive: Record<string, DownloadEntry> = {};
         for (const [id, e] of Object.entries(parsed)) {
-          if (new File(e.fileUri).exists) alive[id] = e;
+          if (!new File(e.fileUri).exists) continue;
+          // Purge pre-compat mp4-family downloads — they may carry the PNG
+          // video stream that AVPlayer refuses. They re-download cleanly.
+          if (!e.compat && /aac|mp4|alac|m4a/i.test(e.track.codec)) {
+            try {
+              new File(e.fileUri).delete();
+            } catch {
+              // best-effort
+            }
+            continue;
+          }
+          alive[id] = e;
         }
         setEntries(alive);
       }
@@ -111,6 +124,7 @@ export function DownloadsProvider({ children }: { children: React.ReactNode }) {
               fileUri: file.uri,
               bytes: file.size ?? 0,
               downloadedAt: new Date().toISOString(),
+              compat: true,
             },
           });
         }

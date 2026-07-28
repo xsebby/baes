@@ -315,6 +315,39 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
                   Slowed / sped
                 </button>
               </div>
+              <div className="sp-semi">
+                <span className="muted small">Semitones</span>
+                <div className="sp-semi-ctl">
+                  <button
+                    className="opt"
+                    onClick={() => {
+                      const semis = Math.round(12 * Math.log2(rate)) - 1;
+                      if (semis < -7) return;
+                      setPreservePitch(false);
+                      setRate(Number(Math.pow(2, semis / 12).toFixed(4)));
+                    }}
+                  >
+                    −
+                  </button>
+                  <span className="sp-semi-val">
+                    {(() => {
+                      const s = Math.round(12 * Math.log2(rate));
+                      return `${s > 0 ? '+' : ''}${s} st`;
+                    })()}
+                  </span>
+                  <button
+                    className="opt"
+                    onClick={() => {
+                      const semis = Math.round(12 * Math.log2(rate)) + 1;
+                      if (semis > 7) return;
+                      setPreservePitch(false);
+                      setRate(Number(Math.pow(2, semis / 12).toFixed(4)));
+                    }}
+                  >
+                    ＋
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

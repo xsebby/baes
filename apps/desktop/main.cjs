@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell } = require('electron');
 const path = require('node:path');
 
 const APP_URL = process.env.BAES_URL ?? 'https://music.sebby.dev';
@@ -37,6 +37,15 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Standard menu so Cmd+R / Cmd+C / Cmd+Q work; the window has no menu bar UI.
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      { role: 'appMenu' },
+      { role: 'editMenu' },
+      { role: 'viewMenu' },
+      { role: 'windowMenu' },
+    ]),
+  );
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

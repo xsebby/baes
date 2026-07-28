@@ -156,18 +156,6 @@ export function LibraryView({
             {s[0]!.toUpperCase() + s.slice(1)}
           </button>
         ))}
-        {segment === 'songs' && tracks.length > 0 && (
-          <button
-            className={`segment${selectMode ? ' active' : ''}`}
-            style={{ marginLeft: 'auto' }}
-            onClick={() => {
-              setSelectMode((v) => !v);
-              setSelected(new Set());
-            }}
-          >
-            {selectMode ? 'Done' : 'Select'}
-          </button>
-        )}
       </div>
       <div className="content">
         {loading ? (
@@ -176,32 +164,46 @@ export function LibraryView({
           tracks.length === 0 ? (
             <div className="empty">{query ? 'No matches' : 'No music yet — scan in Admin'}</div>
           ) : (
-            tracks.map((t) =>
-              selectMode ? (
-                <div
-                  key={t.id}
-                  className={`track-row selectable${selected.has(t.id) ? ' selected' : ''}`}
-                  onClick={() => toggleSelected(t.id)}
+            <>
+              <div className="list-tools">
+                <span className="muted small">{tracks.length} tracks</span>
+                <button
+                  className={`segment${selectMode ? ' active' : ''}`}
+                  onClick={() => {
+                    setSelectMode((v) => !v);
+                    setSelected(new Set());
+                  }}
                 >
-                  <div className={`checkbox${selected.has(t.id) ? ' checked' : ''}`}>
-                    {selected.has(t.id) ? '✓' : ''}
+                  {selectMode ? 'Done' : 'Select'}
+                </button>
+              </div>
+              {tracks.map((t) =>
+                selectMode ? (
+                  <div
+                    key={t.id}
+                    className={`track-row selectable${selected.has(t.id) ? ' selected' : ''}`}
+                    onClick={() => toggleSelected(t.id)}
+                  >
+                    <div className={`checkbox${selected.has(t.id) ? ' checked' : ''}`}>
+                      {selected.has(t.id) ? '✓' : ''}
+                    </div>
+                    <div className="meta">
+                      <div className="title">{t.title}</div>
+                      <div className="sub">{t.artistName ?? 'Unknown artist'}</div>
+                    </div>
+                    <div className="dur">{formatDuration(t.durationMs)}</div>
                   </div>
-                  <div className="meta">
-                    <div className="title">{t.title}</div>
-                    <div className="sub">{t.artistName ?? 'Unknown artist'}</div>
-                  </div>
-                  <div className="dur">{formatDuration(t.durationMs)}</div>
-                </div>
-              ) : (
-                <TrackRow
-                  key={t.id}
-                  track={t}
-                  queue={tracks}
-                  onAddToPlaylist={onAddToPlaylist}
-                  onEdit={setEditTrack}
-                />
-              ),
-            )
+                ) : (
+                  <TrackRow
+                    key={t.id}
+                    track={t}
+                    queue={tracks}
+                    onAddToPlaylist={onAddToPlaylist}
+                    onEdit={setEditTrack}
+                  />
+                ),
+              )}
+            </>
           )
         ) : segment === 'albums' ? (
           <div className="album-grid">

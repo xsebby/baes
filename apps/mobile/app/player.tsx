@@ -240,6 +240,38 @@ export default function NowPlaying() {
             </View>
             <View style={styles.presetRow}>
               <Pressable
+                style={styles.mode}
+                onPress={() => {
+                  const semis = Math.round(12 * Math.log2(rate)) - 1;
+                  if (semis < -7) return;
+                  setKeepPitch(false);
+                  setRate(Number(Math.pow(2, semis / 12).toFixed(4)));
+                }}
+              >
+                <Text style={styles.presetText}>− st</Text>
+              </Pressable>
+              <View style={[styles.mode, { backgroundColor: 'transparent' }]}>
+                <Text style={[styles.presetText, { color: '#8ab4ff' }]}>
+                  {(() => {
+                    const st = Math.round(12 * Math.log2(rate));
+                    return `${st > 0 ? '+' : ''}${st} st`;
+                  })()}
+                </Text>
+              </View>
+              <Pressable
+                style={styles.mode}
+                onPress={() => {
+                  const semis = Math.round(12 * Math.log2(rate)) + 1;
+                  if (semis > 7) return;
+                  setKeepPitch(false);
+                  setRate(Number(Math.pow(2, semis / 12).toFixed(4)));
+                }}
+              >
+                <Text style={styles.presetText}>+ st</Text>
+              </Pressable>
+            </View>
+            <View style={styles.presetRow}>
+              <Pressable
                 style={[styles.mode, keepPitch && styles.presetActive]}
                 onPress={() => setKeepPitch(true)}
               >

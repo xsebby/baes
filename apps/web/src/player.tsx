@@ -27,6 +27,8 @@ interface PlayerState {
   setVolume: (v: number) => void;
   setRate: (r: number) => void;
   setPreservePitch: (b: boolean) => void;
+  /** 0..1 smoothed audio energy for reactive visuals; 0 when unavailable. */
+  getLevel: () => number;
 }
 
 const PlayerContext = createContext<PlayerState | null>(null);
@@ -46,6 +48,41 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [preservePitch, setPreservePitchState] = useState(true);
   const rateRef = useRef(1);
   const preservePitchRef = useRef(true);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const freqRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+
+  // Lazily wire the analyser on first play (AudioContext needs a user gesture).
+  const ensureAnalyser = useCallback(() => {
+    if (analyserRef.current) return;
+    try {
+      const Ctx =
+        window.AudioContext ??
+        (window as never as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new Ctx();
+      const src = ctx.createMediaElementSource(audioRef.current);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.82;
+      src.connect(analyser);
+      analyser.connect(ctx.destination);
+      analyserRef.current = analyser;
+      freqRef.current = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
+    } catch {
+      // analysis unavailable — visuals fall back to time-based animation
+    }
+  }, []);
+
+  const getLevel = useCallback((): number => {
+    const analyser = analyserRef.current;
+    const buf = freqRef.current;
+    if (!analyser || !buf) return 0;
+    analyser.getByteFrequencyData(buf);
+    // weight the low end — kick/bass is what you want visuals to breathe with
+    let sum = 0;
+    const n = Math.max(8, Math.floor(buf.length * 0.25));
+    for (let i = 0; i < n; i++) sum += buf[i]!;
+    return Math.min(1, sum / n / 220);
+  }, []);
 
   // Refs so MediaSession/ended handlers see fresh values without re-binding.
   const currentRef = useRef(current);
@@ -99,7 +136,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     audio.preservesPitch = preservePitch;
     const onTime = () => setPositionSec(audio.currentTime);
     const onDur = () => setDurationSec(audio.duration || 0);
-    const onPlay = () => setPlaying(true);
+    const onPlay = () => {
+      ensureAnalyser();
+      setPlaying(true);
+    };
     const onPause = () => setPlaying(false);
     const onEnded = () => skipTo(1);
     // Browsers reset playbackRate on new sources and Safari defers changes made
@@ -109,6 +149,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audio.preservesPitch = preservePitchRef.current;
     };
     audio.addEventListener('loadedmetadata', reassert);
+    audio.addEventListener('canplay', reassert);
+    audio.addEventListener('seeked', reassert);
     audio.addEventListener('play', reassert);
     audio.addEventListener('timeupdate', onTime);
     audio.addEventListener('durationchange', onDur);
@@ -122,10 +164,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('loadedmetadata', reassert);
+      audio.removeEventListener('canplay', reassert);
+      audio.removeEventListener('seeked', reassert);
       audio.removeEventListener('play', reassert);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skipTo]);
+  }, [skipTo, ensureAnalyser]);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
@@ -186,6 +230,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setVolume,
       setRate,
       setPreservePitch,
+      getLevel,
     }),
     [
       current,

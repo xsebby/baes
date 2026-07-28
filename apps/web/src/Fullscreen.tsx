@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatSeconds, useAuth } from './state';
 import { usePlayer } from './player';
 import { loadTheme } from './theme';
@@ -44,6 +44,19 @@ export function FullscreenPlayer({ onClose }: { onClose: () => void }) {
   const [colors, setColors] = useState<string[]>(['#3a2f5c', '#1c4a5e', '#5c2f45', '#2f5c3a']);
   const [dragSec, setDragSec] = useState<number | null>(null);
   const fsStyle = loadTheme().fsStyle;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const { getLevel } = usePlayer();
+
+  // NCS-style reactivity: pump the smoothed audio level into a CSS variable.
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      rootRef.current?.style.setProperty('--level', getLevel().toFixed(3));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [getLevel]);
 
   const artSrc = current?.artUrl ? client.mediaUrl(current.artUrl) : null;
 
@@ -79,7 +92,7 @@ export function FullscreenPlayer({ onClose }: { onClose: () => void }) {
   const shown = dragSec ?? positionSec;
 
   return (
-    <div className={`fs fs-style-${fsStyle}`} onDoubleClick={onClose}>
+    <div ref={rootRef} className={`fs fs-style-${fsStyle}`} onDoubleClick={onClose}>
       <div className="fs-bg" aria-hidden>
         {fsStyle !== 'minimal' &&
           colors.map((c, i) => (

@@ -58,9 +58,9 @@ function filenameFromDisposition(value: string | null): string | null {
   return /filename="?([^";]+)"?/i.exec(value)?.[1] ?? null;
 }
 
-async function filenameFromPillowcasePage(fileId: string): Promise<string | null> {
+async function filenameFromPillowcasePage(fileId: string, pageUrl: string): Promise<string | null> {
   try {
-    const page = await fetch(`https://pillowcase.su/f/${encodeURIComponent(fileId)}`, {
+    const page = await fetch(pageUrl, {
       headers: { accept: 'text/html' },
       signal: AbortSignal.timeout(30 * 1000),
     });
@@ -73,20 +73,31 @@ async function filenameFromPillowcasePage(fileId: string): Promise<string | null
   }
 }
 
-/** Returns the file ID for a supported Pillowcase sharing URL. */
-export function pillowcaseFileId(input: string): string | null {
+function pillowcaseLink(input: string): { fileId: string; pageUrl: string } | null {
   try {
     const url = new URL(input);
     if (!PILLOWCASE_HOSTS.has(url.hostname.toLowerCase())) return null;
 
     const match = /^\/f\/([^/]+)\/?$/.exec(url.pathname);
-    const id = match?.[1];
+    const fileId = match?.[1];
     // File IDs are opaque, but accepting only a single URL-safe path component
     // prevents it from changing the direct-download URL below.
-    return id && /^[A-Za-z0-9_-]{6,128}$/.test(id) ? id : null;
+    if (!fileId || !/^[A-Za-z0-9_-]{6,128}$/.test(fileId)) return null;
+
+    return { fileId, pageUrl: `${url.origin}/f/${encodeURIComponent(fileId)}` };
   } catch {
     return null;
   }
+}
+
+/** Returns the file ID for a supported Pillowcase sharing URL. */
+export function pillowcaseFileId(input: string): string | null {
+  return pillowcaseLink(input)?.fileId ?? null;
+}
+
+/** Preserves the sharing host so its filename metadata can be fetched correctly. */
+export function pillowcasePageUrl(input: string): string | null {
+  return pillowcaseLink(input)?.pageUrl ?? null;
 }
 
 async function availableTarget(directory: string, name: string): Promise<string> {
@@ -105,7 +116,11 @@ async function availableTarget(directory: string, name: string): Promise<string>
  * Downloads a Pillowcase file directly. The host's regular sharing URLs are
  * landing pages, while its download API returns the actual file bytes.
  */
-export async function downloadPillowcaseFile(fileId: string, uploadsDir: string): Promise<string> {
+export async function downloadPillowcaseFile(
+  fileId: string,
+  uploadsDir: string,
+  pageUrl = `https://pillowcase.su/f/${encodeURIComponent(fileId)}`,
+): Promise<string> {
   const res = await fetch(`https://api.pillowcase.su/api/download/${encodeURIComponent(fileId)}`, {
     headers: { accept: 'audio/*, application/octet-stream' },
     signal: AbortSignal.timeout(10 * 60 * 1000),
@@ -116,7 +131,7 @@ export async function downloadPillowcaseFile(fileId: string, uploadsDir: string)
 
   const fromHeader = filenameFromDisposition(res.headers.get('content-disposition'));
   const mimeType = res.headers.get('content-type')?.split(';', 1)[0]?.toLowerCase();
-  const fromPage = fromHeader ? null : await filenameFromPillowcasePage(fileId);
+  const fromPage = fromHeader ? null : await filenameFromPillowcasePage(fileId, pageUrl);
   const sourceName = fromHeader ?? fromPage;
   const extension = sourceName
     ? path.extname(sourceName).toLowerCase()

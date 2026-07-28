@@ -855,7 +855,7 @@ function IngestSection() {
             padding: '10px 12px',
             color: 'var(--text)',
           }}
-          placeholder="https://soundcloud.com/… or pillowcase.su/f/…"
+          placeholder="URL, Pillowcase link, or public TrackerHub sheet"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && startImport()}

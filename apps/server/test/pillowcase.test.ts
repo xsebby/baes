@@ -2,7 +2,11 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { downloadPillowcaseFile, pillowcaseFileId } from '../src/ingest/pillowcase.js';
+import {
+  downloadPillowcaseFile,
+  pillowcaseFileId,
+  pillowcasePageUrl,
+} from '../src/ingest/pillowcase.js';
 
 describe('Pillowcase import', () => {
   afterEach(() => {
@@ -17,6 +21,12 @@ describe('Pillowcase import', () => {
     ['https://pillowcase.su/f/../../etc/passwd', null],
   ])('recognizes sharing links safely', (url, expected) => {
     expect(pillowcaseFileId(url)).toBe(expected);
+  });
+
+  it('preserves the sharing host for fallback metadata', () => {
+    expect(pillowcasePageUrl('https://pillows.su/f/119e64302e629ee25ebf035b7664b516')).toBe(
+      'https://pillows.su/f/119e64302e629ee25ebf035b7664b516',
+    );
   });
 
   it('downloads the audio bytes from Pillowcase’s download endpoint', async () => {
@@ -60,12 +70,16 @@ describe('Pillowcase import', () => {
     vi.stubGlobal('fetch', mockedFetch);
 
     try {
-      const saved = await downloadPillowcaseFile('abc123def456', uploadsDir);
+      const saved = await downloadPillowcaseFile(
+        'abc123def456',
+        uploadsDir,
+        'https://pillows.su/f/abc123def456',
+      );
       expect(saved).toBe('Fallback Song.flac');
       expect(await readFile(path.join(uploadsDir, saved))).toEqual(contents);
       expect(mockedFetch).toHaveBeenNthCalledWith(
         2,
-        'https://pillowcase.su/f/abc123def456',
+        'https://pillows.su/f/abc123def456',
         expect.objectContaining({ headers: { accept: 'text/html' } }),
       );
     } finally {

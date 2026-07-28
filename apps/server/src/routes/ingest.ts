@@ -12,7 +12,12 @@ import { albums, artists, libraryRoots, playlistItems, playlists, tracks } from 
 import type { Database } from '../db.js';
 import type { Config } from '../config.js';
 import type { LibraryScanner } from '../library/scanner.js';
-import { downloadPillowcaseFile, pillowcaseFileId } from '../ingest/pillowcase.js';
+import {
+  downloadPillowcaseFile,
+  pillowcaseFileId,
+  pillowcasePageUrl,
+} from '../ingest/pillowcase.js';
+import { trackerhubCsvUrl, trackerhubMediaUrls } from '../ingest/trackerhub.js';
 
 const AUDIO_EXTENSIONS = new Set([
   '.mp3',
@@ -225,26 +230,23 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
 
   const importSchema = z.object({ url: z.string().url() });
 
-  app.post('/api/import-url', { preHandler: app.requireOwner }, async (req, reply) => {
-    const body = importSchema.safeParse(req.body);
-    if (!body.success) {
-      return reply.code(400).send({ error: 'invalid_request', message: body.error.message });
-    }
-    await ensureUploadsRoot();
-
+  function addJob(url: string): ImportJob {
     const job: ImportJob = {
       id: randomUUID(),
-      url: body.data.url,
+      url,
       status: 'running',
       error: null,
       startedAt: new Date().toISOString(),
     };
     jobs.unshift(job);
     if (jobs.length > 50) jobs.pop();
+    return job;
+  }
 
-    const pillowcaseId = pillowcaseFileId(body.data.url);
+  function startImport(job: ImportJob): void {
+    const pillowcaseId = pillowcaseFileId(job.url);
     if (pillowcaseId) {
-      void downloadPillowcaseFile(pillowcaseId, uploadsDir)
+      void downloadPillowcaseFile(pillowcaseId, uploadsDir, pillowcasePageUrl(job.url)!)
         .then(() => {
           job.status = 'done';
           scanner.start();
@@ -253,7 +255,7 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
           job.status = 'error';
           job.error = err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300);
         });
-      return reply.code(202).send({ job });
+      return;
     }
 
     const proc = spawn(
@@ -269,7 +271,7 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
         '--embed-thumbnail',
         '-o',
         path.join(uploadsDir, '%(title)s.%(ext)s'),
-        body.data.url,
+        job.url,
       ],
       { stdio: ['ignore', 'ignore', 'pipe'] },
     );
@@ -294,6 +296,30 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
         job.error = stderr.split('\n').filter(Boolean).slice(-2).join(' ').slice(0, 300);
       }
     });
+  }
+
+  app.post('/api/import-url', { preHandler: app.requireOwner }, async (req, reply) => {
+    const body = importSchema.safeParse(req.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: 'invalid_request', message: body.error.message });
+    }
+    await ensureUploadsRoot();
+
+    const job = addJob(body.data.url);
+    if (trackerhubCsvUrl(body.data.url)) {
+      void trackerhubMediaUrls(body.data.url)
+        .then((urls) => {
+          job.status = 'done';
+          for (const url of urls) startImport(addJob(url));
+        })
+        .catch((err: unknown) => {
+          job.status = 'error';
+          job.error = err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300);
+        });
+      return reply.code(202).send({ job });
+    }
+
+    startImport(job);
 
     return reply.code(202).send({ job });
   });

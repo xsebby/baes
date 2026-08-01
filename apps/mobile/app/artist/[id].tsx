@@ -8,6 +8,7 @@ import { useDownloads } from '../../src/downloads';
 import { usePlayer } from '../../src/player';
 import { NowPlayingBar } from '../../src/components/NowPlayingBar';
 import { TrackRow } from '../../src/components/TrackRow';
+import { readCache, writeCache } from '../../src/offline';
 
 export default function ArtistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -19,10 +20,18 @@ export default function ArtistScreen() {
 
   useEffect(() => {
     if (!client || !id) return;
+    const key = `artist-${id}`;
+    const cached = readCache<ArtistDetail>(key);
+    if (cached) setArtist(cached);
     client
       .getArtist(id)
-      .then(setArtist)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load artist'));
+      .then((fresh) => {
+        setArtist(fresh);
+        writeCache(key, fresh);
+      })
+      .catch((e) => {
+        if (!cached) setError(e instanceof Error ? e.message : 'Failed to load artist');
+      });
   }, [client, id]);
 
   // Group the artist's tracks by album; albumless tracks become "Singles & loosies".

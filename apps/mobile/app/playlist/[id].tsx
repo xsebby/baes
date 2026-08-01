@@ -9,6 +9,7 @@ import { useDownloads } from '../../src/downloads';
 import { usePlayer } from '../../src/player';
 import { NowPlayingBar } from '../../src/components/NowPlayingBar';
 import { TrackRow } from '../../src/components/TrackRow';
+import { readCache, writeCache } from '../../src/offline';
 
 export default function PlaylistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -20,10 +21,18 @@ export default function PlaylistScreen() {
 
   const load = useCallback(() => {
     if (!client || !id) return;
+    const key = `playlist-${id}`;
+    const cached = readCache<PlaylistDetail>(key);
+    if (cached) setPlaylist(cached);
     client
       .getPlaylist(id)
-      .then(setPlaylist)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load playlist'));
+      .then((fresh) => {
+        setPlaylist(fresh);
+        writeCache(key, fresh);
+      })
+      .catch((e) => {
+        if (!cached) setError(e instanceof Error ? e.message : 'Failed to load playlist');
+      });
   }, [client, id]);
 
   useEffect(load, [load]);

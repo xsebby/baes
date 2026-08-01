@@ -19,6 +19,7 @@ import { useDownloads } from '../src/downloads';
 import { usePlayer } from '../src/player';
 import { NowPlayingBar } from '../src/components/NowPlayingBar';
 import { TrackRow } from '../src/components/TrackRow';
+import { CachedImage, readCache, writeCache } from '../src/offline';
 
 type Segment = 'songs' | 'albums' | 'artists' | 'playlists';
 
@@ -35,6 +36,7 @@ export default function Library() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [offline, setOffline] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(
@@ -52,8 +54,36 @@ export default function Library() {
         setAlbums(al.albums);
         setArtists(ar.artists);
         setPlaylists(pl.playlists);
+        setOffline(false);
+        // Mirror to disk so the library stays browsable without a connection.
+        if (!q) writeCache('tracks', t.tracks);
+        writeCache('albums', al.albums);
+        writeCache('artists', ar.artists);
+        writeCache('playlists', pl.playlists);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load library');
+        const ct = readCache<Track[]>('tracks');
+        const ca = readCache<AlbumSummary[]>('albums');
+        const cr = readCache<ArtistSummary[]>('artists');
+        const cp = readCache<PlaylistSummary[]>('playlists');
+        if (ct || ca || cr || cp) {
+          const needle = (q ?? '').toLowerCase();
+          setTracks(
+            needle
+              ? (ct ?? []).filter(
+                  (x) =>
+                    x.title.toLowerCase().includes(needle) ||
+                    (x.artistName ?? '').toLowerCase().includes(needle),
+                )
+              : (ct ?? []),
+          );
+          setAlbums(ca ?? []);
+          setArtists(cr ?? []);
+          setPlaylists(cp ?? []);
+          setOffline(true);
+          setError(null);
+        } else {
+          setError(e instanceof Error ? e.message : 'Failed to load library');
+        }
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -111,13 +141,12 @@ export default function Library() {
               }}
               delayLongPress={400}
             >
-              {item.artUrl && client ? (
-                <Image source={{ uri: client.mediaUrl(item.artUrl) }} style={styles.albumArt} />
-              ) : (
-                <View style={[styles.albumArt, styles.artPlaceholder]}>
-                  <Ionicons name="disc" size={40} color="#444" />
-                </View>
-              )}
+              <CachedImage
+                id={item.id}
+                remoteUri={item.artUrl && client ? client.mediaUrl(item.artUrl) : null}
+                style={[styles.albumArt, styles.artPlaceholder]}
+                placeholder={<Ionicons name="disc" size={40} color="#444" />}
+              />
               <Text style={styles.albumTitle} numberOfLines={1}>
                 {item.title}
               </Text>
@@ -214,13 +243,12 @@ export default function Library() {
               }}
               delayLongPress={400}
             >
-              {item.artUrl && client ? (
-                <Image source={{ uri: client.mediaUrl(item.artUrl) }} style={styles.playlistArt} />
-              ) : (
-                <View style={styles.artistBubble}>
-                  <Ionicons name="list" size={20} color="#666" />
-                </View>
-              )}
+              <CachedImage
+                id={item.id}
+                remoteUri={item.artUrl && client ? client.mediaUrl(item.artUrl) : null}
+                style={[styles.playlistArt, styles.artPlaceholder]}
+                placeholder={<Ionicons name="list" size={20} color="#666" />}
+              />
               <View style={{ flex: 1 }}>
                 <Text style={styles.artistName}>{item.title}</Text>
                 <Text style={styles.artistMeta}>
@@ -290,6 +318,12 @@ export default function Library() {
         ))}
       </View>
 
+      {offline && (
+        <View style={styles.offlineBanner}>
+          <Ionicons name="cloud-offline-outline" size={14} color="#ffc27d" />
+          <Text style={styles.offlineText}>Offline — showing your saved library</Text>
+        </View>
+      )}
       {renderBody()}
       <NowPlayingBar />
     </View>
@@ -298,6 +332,15 @@ export default function Library() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0b0b0f' },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: '#2a2118',
+  },
+  offlineText: { color: '#ffc27d', fontSize: 12 },
   header: { flexDirection: 'row', gap: 8, padding: 12, paddingBottom: 8 },
   search: {
     flex: 1,

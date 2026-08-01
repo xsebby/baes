@@ -16,6 +16,7 @@ import { useDownloads } from '../../src/downloads';
 import { usePlayer } from '../../src/player';
 import { NowPlayingBar } from '../../src/components/NowPlayingBar';
 import { TrackRow } from '../../src/components/TrackRow';
+import { CachedImage, readCache, writeCache } from '../../src/offline';
 
 export default function AlbumScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -27,10 +28,18 @@ export default function AlbumScreen() {
 
   useEffect(() => {
     if (!client || !id) return;
+    const key = `album-${id}`;
+    const cached = readCache<AlbumDetail>(key);
+    if (cached) setAlbum(cached);
     client
       .getAlbum(id)
-      .then(setAlbum)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load album'));
+      .then((fresh) => {
+        setAlbum(fresh);
+        writeCache(key, fresh);
+      })
+      .catch((e) => {
+        if (!cached) setError(e instanceof Error ? e.message : 'Failed to load album');
+      });
   }, [client, id]);
 
   if (error) return <Text style={styles.error}>{error}</Text>;
@@ -47,13 +56,12 @@ export default function AlbumScreen() {
         keyExtractor={(t) => t.id}
         ListHeaderComponent={
           <View style={styles.header}>
-            {album.artUrl ? (
-              <Image source={{ uri: client.mediaUrl(album.artUrl) }} style={styles.art} />
-            ) : (
-              <View style={[styles.art, styles.artPlaceholder]}>
-                <Ionicons name="disc" size={64} color="#444" />
-              </View>
-            )}
+            <CachedImage
+              id={album.id}
+              remoteUri={album.artUrl ? client.mediaUrl(album.artUrl) : null}
+              style={[styles.art, styles.artPlaceholder]}
+              placeholder={<Ionicons name="disc" size={64} color="#444" />}
+            />
             <Text style={styles.title}>{album.title}</Text>
             <Text style={styles.meta}>
               {album.artistName ?? 'Unknown artist'}

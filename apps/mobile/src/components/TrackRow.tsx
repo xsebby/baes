@@ -5,6 +5,7 @@ import type { Track } from '@baes/core';
 import { useAuth } from '../auth';
 import { useDownloads } from '../downloads';
 import { formatDuration, usePlayer } from '../player';
+import { CachedImage } from '../offline';
 
 interface Props {
   track: Track;
@@ -43,13 +44,12 @@ export function TrackRow({ track, queue, showArt = true, showTrackNo = false, tr
           )}
         </View>
       ) : showArt ? (
-        track.artUrl && client ? (
-          <Image source={{ uri: client.mediaUrl(track.artUrl) }} style={styles.art} />
-        ) : (
-          <View style={[styles.art, styles.artPlaceholder]}>
-            <Ionicons name="musical-note" size={18} color="#555" />
-          </View>
-        )
+        <CachedImage
+          id={track.albumId}
+          remoteUri={track.artUrl && client ? client.mediaUrl(track.artUrl) : null}
+          style={[styles.art, styles.artPlaceholder]}
+          placeholder={<Ionicons name="musical-note" size={18} color="#555" />}
+        />
       ) : null}
       <View style={styles.meta}>
         <Text style={[styles.title, active && styles.activeTitle]} numberOfLines={1}>

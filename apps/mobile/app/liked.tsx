@@ -7,6 +7,7 @@ import { useDownloads } from '../src/downloads';
 import { usePlayer } from '../src/player';
 import { NowPlayingBar } from '../src/components/NowPlayingBar';
 import { TrackRow } from '../src/components/TrackRow';
+import { readCache, writeCache } from '../src/offline';
 
 export default function LikedScreen() {
   const { client } = useAuth();
@@ -15,10 +16,15 @@ export default function LikedScreen() {
   const [tracks, setTracks] = useState<Track[] | null>(null);
 
   const load = useCallback(() => {
+    const cached = readCache<Track[]>('liked');
+    if (cached) setTracks(cached);
     client
       ?.listLikedTracks()
-      .then((r) => setTracks(r.tracks))
-      .catch(() => setTracks([]));
+      .then((r) => {
+        setTracks(r.tracks);
+        writeCache('liked', r.tracks);
+      })
+      .catch(() => setTracks((prev) => prev ?? cached ?? []));
   }, [client]);
 
   useEffect(load, [load]);

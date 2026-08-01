@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -25,6 +26,7 @@ export default function AlbumScreen() {
   const { download, isDownloaded, queueLength } = useDownloads();
   const [album, setAlbum] = useState<AlbumDetail | null>(null);
   const [tracklistId, setTracklistId] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -80,36 +82,14 @@ export default function AlbumScreen() {
               {album.year ? ` · ${album.year}` : ''} · {shownTracks.length} tracks · {totalMin} min
             </Text>
             {(album.tracklists?.length ?? 0) > 0 && (
-              <View style={styles.versionRow}>
-                <Pressable
-                  style={[styles.versionChip, !tracklistId && styles.versionChipActive]}
-                  onPress={() => setTracklistId(null)}
-                >
-                  <Text style={[styles.versionText, !tracklistId && styles.versionTextActive]}>
-                    All tracks
-                  </Text>
-                  <Text style={[styles.versionCount, !tracklistId && styles.versionTextActive]}>
-                    {album.tracks.length}
-                  </Text>
-                </Pressable>
-                {album.tracklists.map((tl) => {
-                  const active = tl.id === tracklistId;
-                  return (
-                    <Pressable
-                      key={tl.id}
-                      style={[styles.versionChip, active && styles.versionChipActive]}
-                      onPress={() => setTracklistId(active ? null : tl.id)}
-                    >
-                      <Text style={[styles.versionText, active && styles.versionTextActive]}>
-                        {tl.name}
-                      </Text>
-                      <Text style={[styles.versionCount, active && styles.versionTextActive]}>
-                        {tl.trackIds.length}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              <Pressable style={styles.dropdown} onPress={() => setPickerOpen(true)}>
+                <Ionicons name="list-outline" size={16} color="#8ab4ff" />
+                <Text style={styles.dropdownText} numberOfLines={1}>
+                  {activeList ? activeList.name : 'All tracks'}
+                </Text>
+                <Text style={styles.dropdownCount}>{shownTracks.length}</Text>
+                <Ionicons name="chevron-down" size={16} color="#888" />
+              </Pressable>
             )}
             {album.versions.length > 1 && (
               <View style={styles.versionRow}>
@@ -166,6 +146,37 @@ export default function AlbumScreen() {
         )}
       />
       <NowPlayingBar />
+
+      <Modal visible={pickerOpen} transparent animationType="fade">
+        <Pressable style={styles.pickerBackdrop} onPress={() => setPickerOpen(false)}>
+          <Pressable style={styles.pickerSheet} onPress={() => {}}>
+            <Text style={styles.pickerTitle}>Tracklist</Text>
+            <Pressable
+              style={[styles.pickerRow, !tracklistId && styles.pickerRowActive]}
+              onPress={() => {
+                setTracklistId(null);
+                setPickerOpen(false);
+              }}
+            >
+              <Text style={styles.pickerLabel}>All tracks</Text>
+              <Text style={styles.pickerCount}>{album.tracks.length}</Text>
+            </Pressable>
+            {(album.tracklists ?? []).map((tl) => (
+              <Pressable
+                key={tl.id}
+                style={[styles.pickerRow, tracklistId === tl.id && styles.pickerRowActive]}
+                onPress={() => {
+                  setTracklistId(tl.id);
+                  setPickerOpen(false);
+                }}
+              >
+                <Text style={styles.pickerLabel}>{tl.name}</Text>
+                <Text style={styles.pickerCount}>{tl.trackIds.length}</Text>
+              </Pressable>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -188,6 +199,47 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   playAllText: { color: '#000', fontWeight: '700', fontSize: 15 },
+  dropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'center',
+    backgroundColor: '#17171d',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: 12,
+    minWidth: 220,
+  },
+  dropdownText: { color: '#fff', fontSize: 14, fontWeight: '600', flex: 1 },
+  dropdownCount: { color: '#666', fontSize: 12 },
+  pickerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  pickerSheet: {
+    backgroundColor: '#17171d',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    paddingVertical: 18,
+    paddingBottom: 40,
+  },
+  pickerTitle: {
+    color: '#888',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    paddingHorizontal: 22,
+    paddingBottom: 8,
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 22,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  pickerRowActive: { backgroundColor: '#22222a' },
+  pickerLabel: { color: '#fff', fontSize: 16, flex: 1 },
+  pickerCount: { color: '#666', fontSize: 13 },
   versionRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

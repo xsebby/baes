@@ -1308,3 +1308,33 @@ body.electron.vibrancy.panels-tinted .sidebar {
   background: var(--accent);
   border-color: var(--accent);
 }
+
+/* ==== tracklist dropdown ==== */
+.tracklist-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.tracklist-select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 14px;
+  min-width: 210px;
+  cursor: pointer;
+}
+.tl-editor-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+.tl-editor-tools .muted {
+  flex: 1;
+}
+.tl-editor-tools .opt {
+  cursor: pointer;
+}

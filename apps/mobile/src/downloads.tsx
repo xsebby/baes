@@ -14,7 +14,14 @@ import { useAuth } from './auth';
 export interface DownloadEntry {
   /** Metadata snapshot so downloads render fully offline. */
   track: Track;
-  fileUri: string;
+  /**
+   * File name inside the downloads directory. iOS relocates the app's data
+   * container across updates, so absolute URIs go stale and every download
+   * would look missing — always resolve against the current directory.
+   */
+  fileName: string;
+  /** Legacy absolute path from older builds; migrated to fileName on load. */
+  fileUri?: string;
   bytes: number;
   downloadedAt: string;
   /** Present when downloaded through the compat pipeline (clean m4a). */
@@ -41,6 +48,14 @@ function downloadsDir(): Directory {
 
 function indexFile(): File {
   return new File(downloadsDir(), 'index.json');
+}
+
+/** Current on-disk file for an entry, or null when it is genuinely gone. */
+function resolveFile(entry: DownloadEntry): File | null {
+  const name = entry.fileName ?? entry.fileUri?.split('/').pop();
+  if (!name) return null;
+  const f = new File(downloadsDir(), name);
+  return f.exists ? f : null;
 }
 
 function extFromTrack(track: Track): string {
@@ -73,20 +88,25 @@ export function DownloadsProvider({ children }: { children: React.ReactNode }) {
         // Drop entries whose audio file vanished (e.g. OS cleared storage).
         const alive: Record<string, DownloadEntry> = {};
         for (const [id, e] of Object.entries(parsed)) {
-          if (!new File(e.fileUri).exists) continue;
+          const file = resolveFile(e);
+          if (!file) continue;
           // Purge pre-compat mp4-family downloads — they may carry the PNG
           // video stream that AVPlayer refuses. They re-download cleanly.
           if (!e.compat && /aac|mp4|alac|m4a/i.test(e.track.codec)) {
             try {
-              new File(e.fileUri).delete();
+              file.delete();
             } catch {
               // best-effort
             }
             continue;
           }
-          alive[id] = e;
+          // Normalise legacy entries onto container-independent file names.
+          alive[id] = { ...e, fileName: file.name, fileUri: undefined };
         }
         setEntries(alive);
+        if (Object.keys(alive).length !== Object.keys(parsed).length) {
+          indexFile().write(JSON.stringify(alive));
+        }
       }
     } catch {
       // corrupted index — start fresh; audio files get re-linked on re-download
@@ -121,7 +141,7 @@ export function DownloadsProvider({ children }: { children: React.ReactNode }) {
             ...entriesRef.current,
             [track.id]: {
               track,
-              fileUri: file.uri,
+              fileName: file.name,
               bytes: file.size ?? 0,
               downloadedAt: new Date().toISOString(),
               compat: true,
@@ -158,8 +178,7 @@ export function DownloadsProvider({ children }: { children: React.ReactNode }) {
       const entry = entriesRef.current[trackId];
       if (!entry) return;
       try {
-        const f = new File(entry.fileUri);
-        if (f.exists) f.delete();
+        resolveFile(entry)?.delete();
       } catch {
         // file already gone
       }
@@ -182,7 +201,10 @@ export function DownloadsProvider({ children }: { children: React.ReactNode }) {
       activeId,
       queueLength,
       isDownloaded: (id) => Boolean(entries[id]),
-      localUri: (id) => entries[id]?.fileUri ?? null,
+      localUri: (id) => {
+        const e = entries[id];
+        return e ? (resolveFile(e)?.uri ?? null) : null;
+      },
       download,
       remove,
       removeAll,

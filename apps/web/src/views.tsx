@@ -447,30 +447,25 @@ export function AlbumView({ id, navigate, onAddToPlaylist }: ViewProps & { id: s
               ))}
             </div>
           )}
-          <div className="version-row">
-            <button
-              className={`opt${!tracklistId ? ' active' : ''}`}
-              onClick={() => setTracklistId(null)}
+          <div className="tracklist-bar">
+            <select
+              className="tracklist-select"
+              value={tracklistId ?? ''}
+              onChange={(e) => setTracklistId(e.target.value || null)}
             >
-              All tracks <span className="muted small">{album.tracks.length}</span>
-            </button>
-            {album.tracklists.map((tl) => (
-              <button
-                key={tl.id}
-                className={`opt${tracklistId === tl.id ? ' active' : ''}`}
-                onClick={() => setTracklistId(tl.id)}
-                onDoubleClick={() => setEditing(tl)}
-                title="Double-click to edit"
-              >
-                {tl.name} <span className="muted small">{tl.trackIds.length}</span>
-              </button>
-            ))}
-            <button className="opt" onClick={() => setEditing('new')}>
-              ＋ Tracklist
+              <option value="">All tracks ({album.tracks.length})</option>
+              {album.tracklists.map((tl) => (
+                <option key={tl.id} value={tl.id}>
+                  {tl.name} ({tl.trackIds.length})
+                </option>
+              ))}
+            </select>
+            <button className="iconbtn" onClick={() => setEditing('new')} title="New tracklist">
+              ＋
             </button>
             {activeList && (
-              <button className="opt" onClick={() => setEditing(activeList)}>
-                Edit “{activeList.name}”
+              <button className="iconbtn" onClick={() => setEditing(activeList)} title="Edit">
+                ✎
               </button>
             )}
           </div>
@@ -530,6 +525,8 @@ function TracklistEditor({
   const [name, setName] = useState(tracklist?.name ?? '');
   const [order, setOrder] = useState<string[]>(tracklist?.trackIds ?? []);
   const [busy, setBusy] = useState(false);
+  const [filter, setFilter] = useState('');
+  const [pickedOnly, setPickedOnly] = useState(false);
 
   function toggle(trackId: string) {
     setOrder((prev) =>
@@ -563,10 +560,40 @@ function TracklistEditor({
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        <div className="muted small" style={{ margin: '6px 0 10px' }}>
-          Tap tracks in the order they should play — {order.length} selected
+        <input
+          placeholder="Search this album…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+        <div className="tl-editor-tools">
+          <span className="muted small">
+            Tap tracks in the order they should play — {order.length} selected
+          </span>
+          <button
+            className={`opt${pickedOnly ? ' active' : ''}`}
+            onClick={() => setPickedOnly((p) => !p)}
+          >
+            {pickedOnly ? 'Show all' : 'Show picked'}
+          </button>
+          {order.length > 0 && (
+            <button className="opt" onClick={() => setOrder([])}>
+              Clear
+            </button>
+          )}
         </div>
-        {album.tracks.map((t) => {
+        {(pickedOnly
+          ? order.flatMap((tid) => {
+              const t = album.tracks.find((x) => x.id === tid);
+              return t ? [t] : [];
+            })
+          : album.tracks.filter((t) => {
+              const q = filter.trim().toLowerCase();
+              if (!q) return true;
+              return (
+                t.title.toLowerCase().includes(q) || (t.artistName ?? '').toLowerCase().includes(q)
+              );
+            })
+        ).map((t) => {
           const pos = order.indexOf(t.id);
           return (
             <div

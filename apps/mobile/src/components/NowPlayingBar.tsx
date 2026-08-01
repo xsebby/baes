@@ -6,7 +6,7 @@ import { usePlayer } from '../player';
 
 export function NowPlayingBar() {
   const { client } = useAuth();
-  const { current, playing, toggle, next, positionSec, durationSec } = usePlayer();
+  const { current, playing, toggle, next, previous, positionSec, durationSec } = usePlayer();
 
   if (!current || !client) return null;
   const progress = durationSec > 0 ? Math.min(positionSec / durationSec, 1) : 0;
@@ -30,6 +30,16 @@ export function NowPlayingBar() {
             {current.artistName ?? 'Unknown artist'}
           </Text>
         </View>
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation();
+            previous();
+          }}
+          style={styles.button}
+          hitSlop={8}
+        >
+          <Ionicons name="play-skip-back" size={22} color="#fff" />
+        </Pressable>
         <Pressable
           onPress={(e) => {
             e.stopPropagation();

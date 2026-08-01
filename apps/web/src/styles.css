@@ -1338,3 +1338,16 @@ body.electron.vibrancy.panels-tinted .sidebar {
 .tl-editor-tools .opt {
   cursor: pointer;
 }
+
+.paste-box {
+  width: 100%;
+  min-height: 180px;
+  background: var(--panel-2);
+  border: none;
+  border-radius: 10px;
+  padding: 12px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}

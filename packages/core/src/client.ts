@@ -263,6 +263,14 @@ export class ApiClient {
     return this.request('POST', `/api/albums/${albumId}/tracklists`, { name, trackIds });
   }
 
+  createTracklistFromText(
+    albumId: string,
+    name: string,
+    text: string,
+  ): Promise<{ tracklist: AlbumTracklist; matched: number; unmatched: string[] }> {
+    return this.request('POST', `/api/albums/${albumId}/tracklists/from-text`, { name, text });
+  }
+
   updateTracklist(id: string, patch: { name?: string; trackIds?: string[] }): Promise<void> {
     return this.request('PATCH', `/api/tracklists/${id}`, patch);
   }

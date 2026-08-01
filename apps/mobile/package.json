@@ -1,7 +1,7 @@
 {
   "name": "@baes/mobile",
   "version": "0.1.0",
-  "main": "expo-router/entry",
+  "main": "index.js",
   "dependencies": {
     "@baes/core": "workspace:*",
     "@expo/vector-icons": "^15.1.1",
@@ -19,7 +19,8 @@
     "react": "19.2.3",
     "react-native": "0.86.0",
     "react-native-safe-area-context": "~5.7.0",
-    "react-native-screens": "~4.26.2"
+    "react-native-screens": "~4.26.2",
+    "react-native-track-player": "^4.1.2"
   },
   "devDependencies": {
     "@expo/ngrok": "^4.1.3",

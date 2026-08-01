@@ -434,20 +434,24 @@ export function AlbumView({ id, navigate, onAddToPlaylist }: ViewProps & { id: s
             {album.artistName ?? 'Unknown artist'}
             {album.year ? ` · ${album.year}` : ''} · {album.tracks.length} tracks
           </div>
-          {album.versions.length > 1 && (
-            <div className="version-row">
-              {album.versions.map((v) => (
-                <button
-                  key={v.id}
-                  className={`opt${v.id === album.id ? ' active' : ''}`}
-                  onClick={() => navigate({ type: 'album', id: v.id })}
-                >
-                  {v.label} <span className="muted small">{v.trackCount}</span>
-                </button>
-              ))}
-            </div>
-          )}
+
           <div className="tracklist-bar">
+            {album.versions.length > 1 && (
+              <select
+                className="tracklist-select"
+                value={album.id}
+                onChange={(e) => {
+                  setTracklistId(null);
+                  navigate({ type: 'album', id: e.target.value });
+                }}
+              >
+                {album.versions.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.label} ({v.trackCount})
+                  </option>
+                ))}
+              </select>
+            )}
             <select
               className="tracklist-select"
               value={tracklistId ?? ''}
@@ -527,6 +531,9 @@ function TracklistEditor({
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState('');
   const [pickedOnly, setPickedOnly] = useState(false);
+  const [pasteMode, setPasteMode] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+  const [pasteReport, setPasteReport] = useState<string | null>(null);
 
   function toggle(trackId: string) {
     setOrder((prev) =>
@@ -560,74 +567,138 @@ function TracklistEditor({
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        <input
-          placeholder="Search this album…"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        />
-        <div className="tl-editor-tools">
-          <span className="muted small">
-            Tap tracks in the order they should play — {order.length} selected
-          </span>
-          <button
-            className={`opt${pickedOnly ? ' active' : ''}`}
-            onClick={() => setPickedOnly((p) => !p)}
-          >
-            {pickedOnly ? 'Show all' : 'Show picked'}
-          </button>
-          {order.length > 0 && (
-            <button className="opt" onClick={() => setOrder([])}>
-              Clear
-            </button>
-          )}
-        </div>
-        {(pickedOnly
-          ? order.flatMap((tid) => {
-              const t = album.tracks.find((x) => x.id === tid);
-              return t ? [t] : [];
-            })
-          : album.tracks.filter((t) => {
-              const q = filter.trim().toLowerCase();
-              if (!q) return true;
-              return (
-                t.title.toLowerCase().includes(q) || (t.artistName ?? '').toLowerCase().includes(q)
-              );
-            })
-        ).map((t) => {
-          const pos = order.indexOf(t.id);
-          return (
-            <div
-              key={t.id}
-              className={`row${pos >= 0 ? ' picked' : ''}`}
-              onClick={() => toggle(t.id)}
-            >
-              <span className={`pick-num${pos >= 0 ? ' on' : ''}`}>{pos >= 0 ? pos + 1 : ''}</span>
-              <span style={{ flex: 1 }}>{t.title}</span>
-              <span className="muted small">{formatDuration(t.durationMs)}</span>
-            </div>
-          );
-        })}
-        <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-          <button className="primary" disabled={!name.trim() || busy} onClick={save}>
-            Save
-          </button>
-          <button className="iconbtn" onClick={onClose}>
-            Cancel
-          </button>
-          {tracklist && (
+        {!tracklist && (
+          <div className="opt-row" style={{ paddingBottom: 4 }}>
             <button
-              className="iconbtn"
-              style={{ marginLeft: 'auto', color: 'var(--danger)' }}
-              onClick={async () => {
-                if (!confirm(`Delete tracklist “${tracklist.name}”?`)) return;
-                await client.deleteTracklist(tracklist.id);
-                onSaved(null);
-              }}
+              className={`opt${!pasteMode ? ' active' : ''}`}
+              onClick={() => setPasteMode(false)}
             >
-              Delete
+              Pick tracks
             </button>
-          )}
-        </div>
+            <button
+              className={`opt${pasteMode ? ' active' : ''}`}
+              onClick={() => setPasteMode(true)}
+            >
+              Paste a tracklist
+            </button>
+          </div>
+        )}
+        {pasteMode && !tracklist ? (
+          <>
+            <textarea
+              className="paste-box"
+              placeholder={'1. Butterfly Doors\n2. Arm & Leg\n3. Bouldercrest\n…'}
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+            />
+            {pasteReport && <div className="muted small">{pasteReport}</div>}
+            <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+              <button
+                className="primary"
+                disabled={!name.trim() || !pasteText.trim() || busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    const res = await client.createTracklistFromText(
+                      album.id,
+                      name.trim(),
+                      pasteText,
+                    );
+                    if (res.unmatched.length) {
+                      setPasteReport(
+                        `Matched ${res.matched}. Not found: ${res.unmatched.slice(0, 10).join(', ')}`,
+                      );
+                      setTimeout(() => onSaved(res.tracklist.id), 1500);
+                    } else {
+                      onSaved(res.tracklist.id);
+                    }
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Create from paste
+              </button>
+              <button className="iconbtn" onClick={onClose}>
+                Cancel
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <input
+              placeholder="Search this album…"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+            <div className="tl-editor-tools">
+              <span className="muted small">
+                Tap tracks in the order they should play — {order.length} selected
+              </span>
+              <button
+                className={`opt${pickedOnly ? ' active' : ''}`}
+                onClick={() => setPickedOnly((p) => !p)}
+              >
+                {pickedOnly ? 'Show all' : 'Show picked'}
+              </button>
+              {order.length > 0 && (
+                <button className="opt" onClick={() => setOrder([])}>
+                  Clear
+                </button>
+              )}
+            </div>
+            {(pickedOnly
+              ? order.flatMap((tid) => {
+                  const t = album.tracks.find((x) => x.id === tid);
+                  return t ? [t] : [];
+                })
+              : album.tracks.filter((t) => {
+                  const q = filter.trim().toLowerCase();
+                  if (!q) return true;
+                  return (
+                    t.title.toLowerCase().includes(q) ||
+                    (t.artistName ?? '').toLowerCase().includes(q)
+                  );
+                })
+            ).map((t) => {
+              const pos = order.indexOf(t.id);
+              return (
+                <div
+                  key={t.id}
+                  className={`row${pos >= 0 ? ' picked' : ''}`}
+                  onClick={() => toggle(t.id)}
+                >
+                  <span className={`pick-num${pos >= 0 ? ' on' : ''}`}>
+                    {pos >= 0 ? pos + 1 : ''}
+                  </span>
+                  <span style={{ flex: 1 }}>{t.title}</span>
+                  <span className="muted small">{formatDuration(t.durationMs)}</span>
+                </div>
+              );
+            })}
+            <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+              <button className="primary" disabled={!name.trim() || busy} onClick={save}>
+                Save
+              </button>
+              <button className="iconbtn" onClick={onClose}>
+                Cancel
+              </button>
+              {tracklist && (
+                <button
+                  className="iconbtn"
+                  style={{ marginLeft: 'auto', color: 'var(--danger)' }}
+                  onClick={async () => {
+                    if (!confirm(`Delete tracklist “${tracklist.name}”?`)) return;
+                    await client.deleteTracklist(tracklist.id);
+                    onSaved(null);
+                  }}
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

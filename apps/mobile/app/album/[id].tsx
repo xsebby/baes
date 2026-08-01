@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
@@ -27,9 +30,14 @@ export default function AlbumScreen() {
   const [album, setAlbum] = useState<AlbumDetail | null>(null);
   const [tracklistId, setTracklistId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [versionOpen, setVersionOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [pasteText, setPasteText] = useState('');
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!client || !id) return;
     const key = `album-${id}`;
     const cached = readCache<AlbumDetail>(key);
@@ -44,6 +52,8 @@ export default function AlbumScreen() {
         if (!cached) setError(e instanceof Error ? e.message : 'Failed to load album');
       });
   }, [client, id]);
+
+  useEffect(load, [load]);
 
   if (error) return <Text style={styles.error}>{error}</Text>;
   if (!album || !client) return <ActivityIndicator color="#fff" style={{ marginTop: 60 }} />;
@@ -81,37 +91,25 @@ export default function AlbumScreen() {
               {album.artistName ?? 'Unknown artist'}
               {album.year ? ` · ${album.year}` : ''} · {shownTracks.length} tracks · {totalMin} min
             </Text>
-            {(album.tracklists?.length ?? 0) > 0 && (
+            <View style={styles.selectorRow}>
+              {album.versions.length > 1 && (
+                <Pressable style={styles.dropdown} onPress={() => setVersionOpen(true)}>
+                  <Ionicons name="albums-outline" size={15} color="#8ab4ff" />
+                  <Text style={styles.dropdownText} numberOfLines={1}>
+                    {album.versionLabel ?? 'Original'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={15} color="#888" />
+                </Pressable>
+              )}
               <Pressable style={styles.dropdown} onPress={() => setPickerOpen(true)}>
-                <Ionicons name="list-outline" size={16} color="#8ab4ff" />
+                <Ionicons name="list-outline" size={15} color="#8ab4ff" />
                 <Text style={styles.dropdownText} numberOfLines={1}>
                   {activeList ? activeList.name : 'All tracks'}
                 </Text>
                 <Text style={styles.dropdownCount}>{shownTracks.length}</Text>
-                <Ionicons name="chevron-down" size={16} color="#888" />
+                <Ionicons name="chevron-down" size={15} color="#888" />
               </Pressable>
-            )}
-            {album.versions.length > 1 && (
-              <View style={styles.versionRow}>
-                {album.versions.map((v) => {
-                  const active = v.id === album.id;
-                  return (
-                    <Pressable
-                      key={v.id}
-                      style={[styles.versionChip, active && styles.versionChipActive]}
-                      onPress={() => !active && router.replace(`/album/${v.id}`)}
-                    >
-                      <Text style={[styles.versionText, active && styles.versionTextActive]}>
-                        {v.label}
-                      </Text>
-                      <Text style={[styles.versionCount, active && styles.versionTextActive]}>
-                        {v.trackCount}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
+            </View>
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Pressable
                 style={styles.playAll}
@@ -169,11 +167,128 @@ export default function AlbumScreen() {
                   setTracklistId(tl.id);
                   setPickerOpen(false);
                 }}
+                onLongPress={() =>
+                  Alert.alert('Delete tracklist?', tl.name, [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: async () => {
+                        await client?.deleteTracklist(tl.id);
+                        if (tracklistId === tl.id) setTracklistId(null);
+                        setPickerOpen(false);
+                        load();
+                      },
+                    },
+                  ])
+                }
               >
                 <Text style={styles.pickerLabel}>{tl.name}</Text>
                 <Text style={styles.pickerCount}>{tl.trackIds.length}</Text>
               </Pressable>
             ))}
+            <Pressable
+              style={styles.pickerRow}
+              onPress={() => {
+                setPickerOpen(false);
+                setNewName('');
+                setPasteText('');
+                setCreating(true);
+              }}
+            >
+              <Ionicons name="add" size={18} color="#8ab4ff" />
+              <Text style={[styles.pickerLabel, { color: '#8ab4ff' }]}>New tracklist…</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={versionOpen} transparent animationType="fade">
+        <Pressable style={styles.pickerBackdrop} onPress={() => setVersionOpen(false)}>
+          <Pressable style={styles.pickerSheet} onPress={() => {}}>
+            <Text style={styles.pickerTitle}>Version</Text>
+            {album.versions.map((v) => (
+              <Pressable
+                key={v.id}
+                style={[styles.pickerRow, v.id === album.id && styles.pickerRowActive]}
+                onPress={() => {
+                  setVersionOpen(false);
+                  if (v.id !== album.id) {
+                    setTracklistId(null);
+                    router.replace(`/album/${v.id}`);
+                  }
+                }}
+              >
+                <Text style={styles.pickerLabel}>{v.label}</Text>
+                <Text style={styles.pickerCount}>{v.trackCount}</Text>
+              </Pressable>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={creating} transparent animationType="slide">
+        <Pressable style={styles.pickerBackdrop} onPress={() => setCreating(false)}>
+          <Pressable style={styles.createSheet} onPress={() => {}}>
+            <Text style={styles.pickerTitle}>New tracklist</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Name (e.g. Neon, Days Before Red)"
+              placeholderTextColor="#666"
+              value={newName}
+              onChangeText={setNewName}
+            />
+            <Text style={styles.helpText}>
+              Paste a numbered tracklist — titles are matched against this album.
+            </Text>
+            <ScrollView style={styles.pasteWrap}>
+              <TextInput
+                style={styles.pasteInput}
+                placeholder={'1. Butterfly Doors\n2. Arm & Leg\n3. …'}
+                placeholderTextColor="#555"
+                multiline
+                value={pasteText}
+                onChangeText={setPasteText}
+              />
+            </ScrollView>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+              <Pressable
+                style={[styles.playAll, (!newName.trim() || saving) && { opacity: 0.4 }]}
+                disabled={!newName.trim() || saving}
+                onPress={async () => {
+                  if (!client || !newName.trim()) return;
+                  setSaving(true);
+                  try {
+                    if (pasteText.trim()) {
+                      const res = await client.createTracklistFromText(
+                        album.id,
+                        newName.trim(),
+                        pasteText,
+                      );
+                      setTracklistId(res.tracklist.id);
+                      if (res.unmatched.length) {
+                        Alert.alert(
+                          `Matched ${res.matched}`,
+                          `Couldn't find: ${res.unmatched.slice(0, 8).join(', ')}`,
+                        );
+                      }
+                    } else {
+                      const res = await client.createTracklist(album.id, newName.trim(), []);
+                      setTracklistId(res.tracklist.id);
+                    }
+                    setCreating(false);
+                    load();
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                <Text style={styles.playAllText}>{saving ? 'Saving…' : 'Create'}</Text>
+              </Pressable>
+              <Pressable style={styles.downloadAll} onPress={() => setCreating(false)}>
+                <Text style={styles.downloadAllText}>Cancel</Text>
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -199,6 +314,33 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   playAllText: { color: '#000', fontWeight: '700', fontSize: 15 },
+  selectorRow: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    marginTop: 12,
+  },
+  createSheet: {
+    backgroundColor: '#17171d',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    padding: 22,
+    paddingBottom: 40,
+    maxHeight: '80%',
+  },
+  input: {
+    backgroundColor: '#22222a',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: '#fff',
+    fontSize: 15,
+    marginBottom: 10,
+  },
+  helpText: { color: '#888', fontSize: 12, marginBottom: 8 },
+  pasteWrap: { maxHeight: 220, backgroundColor: '#22222a', borderRadius: 10 },
+  pasteInput: { color: '#fff', fontSize: 14, padding: 12, minHeight: 140 },
   dropdown: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -208,8 +350,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    marginTop: 12,
-    minWidth: 220,
+    minWidth: 150,
   },
   dropdownText: { color: '#fff', fontSize: 14, fontWeight: '600', flex: 1 },
   dropdownCount: { color: '#666', fontSize: 12 },

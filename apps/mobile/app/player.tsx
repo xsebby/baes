@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     borderRadius: 170,
     opacity: 0.35,
   },
-  rateBtn: { width: 52, alignItems: 'center' },
+  rateBtn: { width: 44, alignItems: 'center' },
   rateText: { color: '#ddd', fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },
   speedBackdrop: {
     flex: 1,
@@ -370,7 +370,12 @@ const styles = StyleSheet.create({
   slider: { width: '100%', height: 36 },
   times: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
   time: { color: '#777', fontSize: 12, fontVariant: ['tabular-nums'] },
-  controls: { flexDirection: 'row', alignItems: 'center', gap: 40 },
+  controls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 22,
+  },
   skip: { color: '#fff', fontSize: 34 },
   playButton: {
     backgroundColor: '#fff',

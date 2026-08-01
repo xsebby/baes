@@ -253,6 +253,45 @@ describe('library scan', () => {
     expect(gone.json().tracklists).toHaveLength(0);
   });
 
+  it('builds a tracklist from pasted numbered text', async () => {
+    const albumsRes = await app.inject({ method: 'GET', url: '/api/albums', headers: auth() });
+    const v1 = albumsRes.json().albums.find((a: any) => a.title === 'Vault [V1]');
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/api/albums/${v1.id}`,
+      headers: auth(),
+    });
+    const titles = detail.json().tracks.map((t: any) => t.title);
+
+    const pasted = [
+      `1. ${titles[1]}`,
+      `2. ${titles[0]} (prod. someone)`,
+      '3. A Song That Does Not Exist',
+    ].join('\n');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/albums/${v1.id}/tracklists/from-text`,
+      headers: auth(),
+      payload: { name: 'Pasted', text: pasted },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    // numbering stripped, order preserved, extra notes tolerated
+    expect(body.matched).toBe(2);
+    expect(body.tracklist.trackIds).toEqual([
+      detail.json().tracks[1].id,
+      detail.json().tracks[0].id,
+    ]);
+    expect(body.unmatched).toEqual(['A Song That Does Not Exist']);
+
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/tracklists/${body.tracklist.id}`,
+      headers: auth(),
+    });
+  });
+
   it('returns artist detail with their tracks', async () => {
     const list = await app.inject({
       method: 'GET',

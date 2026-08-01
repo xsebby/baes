@@ -75,7 +75,16 @@ export interface AlbumVersion {
   artUrl: string | null;
 }
 
+export interface AlbumTracklist {
+  id: string;
+  name: string;
+  /** Ordered track ids; resolve against the album's `tracks`. */
+  trackIds: string[];
+}
+
 export interface AlbumDetail extends Omit<AlbumSummary, 'trackCount'> {
+  /** Curated listens inside this album; empty means just the full track list. */
+  tracklists: AlbumTracklist[];
   /** Title with any trailing version suffix removed. */
   baseTitle: string;
   /** e.g. "V1" when the album title carries a bracketed version marker. */

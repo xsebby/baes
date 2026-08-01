@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
+  AlbumTracklist,
   ImportEraPreviewItem,
   ImportJob,
   ImportPreviewItem,
@@ -397,6 +398,8 @@ function PlayAllButton({ tracks }: { tracks: Track[] }) {
 export function AlbumView({ id, navigate, onAddToPlaylist }: ViewProps & { id: string }) {
   const { client } = useAuth();
   const [album, setAlbum] = useState<AlbumDetail | null>(null);
+  const [tracklistId, setTracklistId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<AlbumTracklist | 'new' | null>(null);
 
   const load = useCallback(() => {
     client
@@ -407,6 +410,16 @@ export function AlbumView({ id, navigate, onAddToPlaylist }: ViewProps & { id: s
   useEffect(load, [load]);
 
   if (!album) return <div className="empty">Loading…</div>;
+
+  const activeList = album.tracklists.find((t) => t.id === tracklistId) ?? null;
+  const byId = new Map(album.tracks.map((t) => [t.id, t]));
+  const shownTracks = activeList
+    ? activeList.trackIds.flatMap((tid) => {
+        const t = byId.get(tid);
+        return t ? [t] : [];
+      })
+    : album.tracks;
+
   return (
     <DetailShell navigate={navigate}>
       <div className="detail-header">
@@ -434,8 +447,35 @@ export function AlbumView({ id, navigate, onAddToPlaylist }: ViewProps & { id: s
               ))}
             </div>
           )}
+          <div className="version-row">
+            <button
+              className={`opt${!tracklistId ? ' active' : ''}`}
+              onClick={() => setTracklistId(null)}
+            >
+              All tracks <span className="muted small">{album.tracks.length}</span>
+            </button>
+            {album.tracklists.map((tl) => (
+              <button
+                key={tl.id}
+                className={`opt${tracklistId === tl.id ? ' active' : ''}`}
+                onClick={() => setTracklistId(tl.id)}
+                onDoubleClick={() => setEditing(tl)}
+                title="Double-click to edit"
+              >
+                {tl.name} <span className="muted small">{tl.trackIds.length}</span>
+              </button>
+            ))}
+            <button className="opt" onClick={() => setEditing('new')}>
+              ＋ Tracklist
+            </button>
+            {activeList && (
+              <button className="opt" onClick={() => setEditing(activeList)}>
+                Edit “{activeList.name}”
+              </button>
+            )}
+          </div>
           <div className="actions">
-            <PlayAllButton tracks={album.tracks} />
+            <PlayAllButton tracks={shownTracks} />
             <label className="iconbtn" style={{ cursor: 'pointer' }}>
               Set cover
               <input
@@ -455,10 +495,114 @@ export function AlbumView({ id, navigate, onAddToPlaylist }: ViewProps & { id: s
           </div>
         </div>
       </div>
-      {album.tracks.map((t) => (
-        <TrackRow key={t.id} track={t} queue={album.tracks} onAddToPlaylist={onAddToPlaylist} />
+      {shownTracks.map((t) => (
+        <TrackRow key={t.id} track={t} queue={shownTracks} onAddToPlaylist={onAddToPlaylist} />
       ))}
+      {editing && (
+        <TracklistEditor
+          album={album}
+          tracklist={editing === 'new' ? null : editing}
+          onClose={() => setEditing(null)}
+          onSaved={(nextId) => {
+            setEditing(null);
+            setTracklistId(nextId);
+            load();
+          }}
+        />
+      )}
     </DetailShell>
+  );
+}
+
+/** Build a tracklist by tapping album tracks in the order they should play. */
+function TracklistEditor({
+  album,
+  tracklist,
+  onClose,
+  onSaved,
+}: {
+  album: AlbumDetail;
+  tracklist: AlbumTracklist | null;
+  onClose: () => void;
+  onSaved: (id: string | null) => void;
+}) {
+  const { client } = useAuth();
+  const [name, setName] = useState(tracklist?.name ?? '');
+  const [order, setOrder] = useState<string[]>(tracklist?.trackIds ?? []);
+  const [busy, setBusy] = useState(false);
+
+  function toggle(trackId: string) {
+    setOrder((prev) =>
+      prev.includes(trackId) ? prev.filter((x) => x !== trackId) : [...prev, trackId],
+    );
+  }
+
+  async function save() {
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    try {
+      if (tracklist) {
+        await client.updateTracklist(tracklist.id, { name: name.trim(), trackIds: order });
+        onSaved(tracklist.id);
+      } else {
+        const res = await client.createTracklist(album.id, name.trim(), order);
+        onSaved(res.tracklist.id);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3>{tracklist ? 'Edit tracklist' : 'New tracklist'}</h3>
+        <input
+          autoFocus
+          placeholder="e.g. Official, Fanmade v2"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <div className="muted small" style={{ margin: '6px 0 10px' }}>
+          Tap tracks in the order they should play — {order.length} selected
+        </div>
+        {album.tracks.map((t) => {
+          const pos = order.indexOf(t.id);
+          return (
+            <div
+              key={t.id}
+              className={`row${pos >= 0 ? ' picked' : ''}`}
+              onClick={() => toggle(t.id)}
+            >
+              <span className={`pick-num${pos >= 0 ? ' on' : ''}`}>{pos >= 0 ? pos + 1 : ''}</span>
+              <span style={{ flex: 1 }}>{t.title}</span>
+              <span className="muted small">{formatDuration(t.durationMs)}</span>
+            </div>
+          );
+        })}
+        <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+          <button className="primary" disabled={!name.trim() || busy} onClick={save}>
+            Save
+          </button>
+          <button className="iconbtn" onClick={onClose}>
+            Cancel
+          </button>
+          {tracklist && (
+            <button
+              className="iconbtn"
+              style={{ marginLeft: 'auto', color: 'var(--danger)' }}
+              onClick={async () => {
+                if (!confirm(`Delete tracklist “${tracklist.name}”?`)) return;
+                await client.deleteTracklist(tracklist.id);
+                onSaved(null);
+              }}
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

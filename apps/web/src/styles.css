@@ -1286,3 +1286,25 @@ body.electron.vibrancy.panels-tinted .sidebar {
 .version-row .opt.active .small {
   color: rgba(0, 0, 0, 0.55);
 }
+
+/* ==== tracklist editor ==== */
+.modal .row.picked {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.pick-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  border: 1.5px solid #444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #000;
+  flex-shrink: 0;
+}
+.pick-num.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}

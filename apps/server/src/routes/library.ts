@@ -1,6 +1,14 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { and, asc, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
-import { albums, artists, libraryRoots, playEvents, tracks } from '@baes/db';
+import {
+  albumTracklistItems,
+  albumTracklists,
+  albums,
+  artists,
+  libraryRoots,
+  playEvents,
+  tracks,
+} from '@baes/db';
 import type { Database } from '../db.js';
 import type { Config } from '../config.js';
 import { mediaPath } from '../library/signing.js';
@@ -174,8 +182,32 @@ export const libraryRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, co
       }))
       .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
+    // Named tracklists carve a big vault album into album-length listens.
+    const tlRows = await db
+      .select({
+        id: albumTracklists.id,
+        name: albumTracklists.name,
+        trackId: albumTracklistItems.trackId,
+        sortKey: albumTracklistItems.sortKey,
+      })
+      .from(albumTracklists)
+      .leftJoin(albumTracklistItems, eq(albumTracklistItems.tracklistId, albumTracklists.id))
+      .where(and(eq(albumTracklists.albumId, id), isNull(albumTracklists.deletedAt)))
+      .orderBy(asc(albumTracklists.createdAt), asc(albumTracklistItems.sortKey));
+
+    const tlMap = new Map<string, { id: string; name: string; trackIds: string[] }>();
+    for (const r of tlRows) {
+      let entry = tlMap.get(r.id);
+      if (!entry) {
+        entry = { id: r.id, name: r.name, trackIds: [] };
+        tlMap.set(r.id, entry);
+      }
+      if (r.trackId) entry.trackIds.push(r.trackId);
+    }
+
     return {
       ...album,
+      tracklists: [...tlMap.values()],
       baseTitle: base,
       versionLabel: splitAlbumVersion(album.title).label,
       versions: versions.length > 1 ? versions : [],

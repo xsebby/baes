@@ -24,6 +24,7 @@ export default function AlbumScreen() {
   const { playTrack } = usePlayer();
   const { download, isDownloaded, queueLength } = useDownloads();
   const [album, setAlbum] = useState<AlbumDetail | null>(null);
+  const [tracklistId, setTracklistId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,14 +46,23 @@ export default function AlbumScreen() {
   if (error) return <Text style={styles.error}>{error}</Text>;
   if (!album || !client) return <ActivityIndicator color="#fff" style={{ marginTop: 60 }} />;
 
-  const totalMs = album.tracks.reduce((sum, t) => sum + t.durationMs, 0);
+  const activeList = album.tracklists?.find((t) => t.id === tracklistId) ?? null;
+  const byId = new Map(album.tracks.map((t) => [t.id, t]));
+  const shownTracks = activeList
+    ? activeList.trackIds.flatMap((tid) => {
+        const t = byId.get(tid);
+        return t ? [t] : [];
+      })
+    : album.tracks;
+
+  const totalMs = shownTracks.reduce((sum, t) => sum + t.durationMs, 0);
   const totalMin = Math.round(totalMs / 60000);
 
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ title: album.title }} />
       <FlatList
-        data={album.tracks}
+        data={shownTracks}
         keyExtractor={(t) => t.id}
         ListHeaderComponent={
           <View style={styles.header}>
@@ -67,8 +77,40 @@ export default function AlbumScreen() {
             </Text>
             <Text style={styles.meta}>
               {album.artistName ?? 'Unknown artist'}
-              {album.year ? ` · ${album.year}` : ''} · {album.tracks.length} tracks · {totalMin} min
+              {album.year ? ` · ${album.year}` : ''} · {shownTracks.length} tracks · {totalMin} min
             </Text>
+            {(album.tracklists?.length ?? 0) > 0 && (
+              <View style={styles.versionRow}>
+                <Pressable
+                  style={[styles.versionChip, !tracklistId && styles.versionChipActive]}
+                  onPress={() => setTracklistId(null)}
+                >
+                  <Text style={[styles.versionText, !tracklistId && styles.versionTextActive]}>
+                    All tracks
+                  </Text>
+                  <Text style={[styles.versionCount, !tracklistId && styles.versionTextActive]}>
+                    {album.tracks.length}
+                  </Text>
+                </Pressable>
+                {album.tracklists.map((tl) => {
+                  const active = tl.id === tracklistId;
+                  return (
+                    <Pressable
+                      key={tl.id}
+                      style={[styles.versionChip, active && styles.versionChipActive]}
+                      onPress={() => setTracklistId(active ? null : tl.id)}
+                    >
+                      <Text style={[styles.versionText, active && styles.versionTextActive]}>
+                        {tl.name}
+                      </Text>
+                      <Text style={[styles.versionCount, active && styles.versionTextActive]}>
+                        {tl.trackIds.length}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
             {album.versions.length > 1 && (
               <View style={styles.versionRow}>
                 {album.versions.map((v) => {
@@ -93,23 +135,23 @@ export default function AlbumScreen() {
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Pressable
                 style={styles.playAll}
-                onPress={() => album.tracks[0] && playTrack(album.tracks[0], album.tracks)}
+                onPress={() => shownTracks[0] && playTrack(shownTracks[0], shownTracks)}
               >
                 <Ionicons name="play" size={18} color="#000" />
                 <Text style={styles.playAllText}>Play</Text>
               </Pressable>
-              <Pressable style={styles.downloadAll} onPress={() => download(album.tracks)}>
+              <Pressable style={styles.downloadAll} onPress={() => download(shownTracks)}>
                 <Ionicons
                   name={
-                    album.tracks.every((t) => isDownloaded(t.id))
+                    shownTracks.every((t) => isDownloaded(t.id))
                       ? 'arrow-down-circle'
                       : 'arrow-down-circle-outline'
                   }
                   size={18}
-                  color={album.tracks.every((t) => isDownloaded(t.id)) ? '#7dd87d' : '#fff'}
+                  color={shownTracks.every((t) => isDownloaded(t.id)) ? '#7dd87d' : '#fff'}
                 />
                 <Text style={styles.downloadAllText}>
-                  {album.tracks.every((t) => isDownloaded(t.id))
+                  {shownTracks.every((t) => isDownloaded(t.id))
                     ? 'Offline'
                     : queueLength > 0
                       ? `${queueLength}…`
@@ -120,7 +162,7 @@ export default function AlbumScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <TrackRow track={item} queue={album.tracks} showArt={false} showTrackNo />
+          <TrackRow track={item} queue={shownTracks} showArt={false} showTrackNo />
         )}
       />
       <NowPlayingBar />

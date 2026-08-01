@@ -1,5 +1,6 @@
 import type {
   AlbumDetail,
+  AlbumTracklist,
   AlbumSummary,
   ApiErrorBody,
   ArtistDetail,
@@ -250,6 +251,24 @@ export class ApiClient {
 
   listImportJobs(): Promise<{ jobs: ImportJob[] }> {
     return this.request('GET', '/api/import-jobs');
+  }
+
+  // ---- Album tracklists ----
+
+  createTracklist(
+    albumId: string,
+    name: string,
+    trackIds: string[] = [],
+  ): Promise<{ tracklist: AlbumTracklist }> {
+    return this.request('POST', `/api/albums/${albumId}/tracklists`, { name, trackIds });
+  }
+
+  updateTracklist(id: string, patch: { name?: string; trackIds?: string[] }): Promise<void> {
+    return this.request('PATCH', `/api/tracklists/${id}`, patch);
+  }
+
+  deleteTracklist(id: string): Promise<void> {
+    return this.request('DELETE', `/api/tracklists/${id}`);
   }
 
   /** Dominant colors of an album/playlist cover (quadrant averages). */

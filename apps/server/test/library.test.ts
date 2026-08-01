@@ -197,6 +197,62 @@ describe('library scan', () => {
     expect(body.versions.find((v: any) => v.label === 'V2').trackCount).toBe(1);
   });
 
+  it('carves an album into named tracklists', async () => {
+    const albumsRes = await app.inject({ method: 'GET', url: '/api/albums', headers: auth() });
+    const v1 = albumsRes.json().albums.find((a: any) => a.title === 'Vault [V1]');
+    const detail0 = await app.inject({
+      method: 'GET',
+      url: `/api/albums/${v1.id}`,
+      headers: auth(),
+    });
+    const trackIds = detail0.json().tracks.map((x: any) => x.id);
+    expect(trackIds.length).toBeGreaterThanOrEqual(2);
+
+    // create a curated listen using the second track first
+    const created = await app.inject({
+      method: 'POST',
+      url: `/api/albums/${v1.id}/tracklists`,
+      headers: auth(),
+      payload: { name: 'Official', trackIds: [trackIds[1], trackIds[0]] },
+    });
+    expect(created.statusCode).toBe(201);
+    const tlId = created.json().tracklist.id;
+
+    const withList = await app.inject({
+      method: 'GET',
+      url: `/api/albums/${v1.id}`,
+      headers: auth(),
+    });
+    const lists = withList.json().tracklists;
+    expect(lists).toHaveLength(1);
+    expect(lists[0].name).toBe('Official');
+    // order is preserved exactly as submitted
+    expect(lists[0].trackIds).toEqual([trackIds[1], trackIds[0]]);
+
+    // rename + replace contents
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/tracklists/${tlId}`,
+      headers: auth(),
+      payload: { name: 'Fanmade v2', trackIds: [trackIds[0]] },
+    });
+    const after = await app.inject({
+      method: 'GET',
+      url: `/api/albums/${v1.id}`,
+      headers: auth(),
+    });
+    expect(after.json().tracklists[0].name).toBe('Fanmade v2');
+    expect(after.json().tracklists[0].trackIds).toEqual([trackIds[0]]);
+
+    await app.inject({ method: 'DELETE', url: `/api/tracklists/${tlId}`, headers: auth() });
+    const gone = await app.inject({
+      method: 'GET',
+      url: `/api/albums/${v1.id}`,
+      headers: auth(),
+    });
+    expect(gone.json().tracklists).toHaveLength(0);
+  });
+
   it('returns artist detail with their tracks', async () => {
     const list = await app.inject({
       method: 'GET',

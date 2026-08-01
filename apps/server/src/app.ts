@@ -14,6 +14,7 @@ import { libraryRoutes } from './routes/library.js';
 import { playlistRoutes } from './routes/playlists.js';
 import { spotifyRoutes } from './routes/spotify.js';
 import { streamRoutes } from './routes/stream.js';
+import { tracklistRoutes } from './routes/tracklists.js';
 import { SpotifySync } from './spotify/sync.js';
 import { users } from '@baes/db';
 
@@ -44,6 +45,7 @@ export async function buildApp(config: Config) {
   await app.register(ingestRoutes, { db, config, scanner });
   await app.register(libraryRoutes, { db, config });
   await app.register(playlistRoutes, { db, config });
+  await app.register(tracklistRoutes, { db });
   await app.register(streamRoutes, { db, config });
 
   const spotifySync = new SpotifySync(db, config, path.join(config.DATA_DIR, 'art'));

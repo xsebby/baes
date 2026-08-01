@@ -146,6 +146,44 @@ export const tracks = pgTable(
   ],
 );
 
+/**
+ * Named tracklists inside an album — an unreleased "album" often holds every
+ * leak and alternate cut, so these carve it into real, album-length listens
+ * ("Official", "Fanmade v2", …). Items reference tracks from any album, but the
+ * tracklist belongs to one.
+ */
+export const albumTracklists = pgTable(
+  'album_tracklists',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    albumId: uuid('album_id')
+      .notNull()
+      .references(() => albums.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    createdBy: uuid('created_by').references(() => users.id),
+    updatedSeq: updatedSeq(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (t) => [index('album_tracklists_album_idx').on(t.albumId)],
+);
+
+export const albumTracklistItems = pgTable(
+  'album_tracklist_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tracklistId: uuid('tracklist_id')
+      .notNull()
+      .references(() => albumTracklists.id, { onDelete: 'cascade' }),
+    trackId: uuid('track_id')
+      .notNull()
+      .references(() => tracks.id, { onDelete: 'cascade' }),
+    sortKey: text('sort_key').notNull(),
+    updatedSeq: updatedSeq(),
+  },
+  (t) => [index('album_tracklist_items_list_idx').on(t.tracklistId, t.sortKey)],
+);
+
 // ---------------------------------------------------------------------------
 // External (Spotify)
 // ---------------------------------------------------------------------------

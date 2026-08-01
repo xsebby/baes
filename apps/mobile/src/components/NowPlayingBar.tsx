@@ -1,18 +1,23 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth';
 import { usePlayer } from '../player';
 
 export function NowPlayingBar() {
   const { client } = useAuth();
+  const insets = useSafeAreaInsets();
   const { current, playing, toggle, next, previous, positionSec, durationSec } = usePlayer();
 
   if (!current || !client) return null;
   const progress = durationSec > 0 ? Math.min(positionSec / durationSec, 1) : 0;
 
   return (
-    <Pressable style={styles.wrap} onPress={() => router.push('/player')}>
+    <Pressable
+      style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 8) }]}
+      onPress={() => router.push('/player')}
+    >
       <View style={[styles.progress, { width: `${progress * 100}%` }]} />
       <View style={styles.row}>
         {current.artUrl ? (

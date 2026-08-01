@@ -15,11 +15,13 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../src/auth';
 import { formatSeconds, usePlayer } from '../src/player';
 
 export default function NowPlaying() {
   const { client } = useAuth();
+  const insets = useSafeAreaInsets();
   const {
     current,
     playing,
@@ -104,7 +106,7 @@ export default function NowPlaying() {
   const drift = pulse.interpolate({ inputRange: [0, 1], outputRange: [0, -30] });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: 24 + insets.bottom }]}>
       <LinearGradient
         colors={[colors[0] ?? '#1b1730', '#0b0b0f']}
         style={StyleSheet.absoluteFill}

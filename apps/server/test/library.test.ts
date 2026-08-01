@@ -1,16 +1,18 @@
-import { mkdtemp, rm, unlink } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { loadConfig } from '../src/config.js';
 import { buildApp } from '../src/app.js';
-import { writeFixtureLibrary } from './fixtures.js';
+import { makeWav, writeFixtureLibrary } from './fixtures.js';
 
 let app: FastifyInstance;
 let musicDir: string;
 let dataDir: string;
 let token: string;
+
+const auth = () => ({ authorization: `Bearer ${token}` });
 
 async function waitForScan(): Promise<void> {
   for (let i = 0; i < 100; i++) {
@@ -144,6 +146,55 @@ describe('library scan', () => {
   it('requires auth for library endpoints', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/tracks' });
     expect(res.statusCode).toBe(401);
+  });
+
+  it('groups albums that differ only by a bracketed version suffix', async () => {
+    // Two albums, same artist, titles differing only by [V1] / [V2]
+    const mk = async (albumTitle: string, songs: string[]) => {
+      const dir = path.join(musicDir, albumTitle.replace(/[^a-z0-9]/gi, '_'));
+      await mkdir(dir, { recursive: true });
+      for (const s of songs) {
+        await writeFile(
+          path.join(dir, `Version Artist - ${s}.wav`),
+          makeWav(0.2 + Math.random() * 0.1),
+        );
+      }
+    };
+    await mk('Vault [V1]', ['One A', 'One B']);
+    await mk('Vault [V2]', ['Two A']);
+    await runScan();
+
+    // tag them into albums (scanner infers no album tag from WAV filenames)
+    const list = await app.inject({ method: 'GET', url: '/api/tracks', headers: auth() });
+    const all = list.json().tracks;
+    for (const [title, album] of [
+      ['One A', 'Vault [V1]'],
+      ['One B', 'Vault [V1]'],
+      ['Two A', 'Vault [V2]'],
+    ] as const) {
+      const tr = all.find((x: any) => x.title === title);
+      await app.inject({
+        method: 'PATCH',
+        url: `/api/tracks/${tr.id}`,
+        headers: auth(),
+        payload: { artistName: 'Version Artist', albumTitle: album },
+      });
+    }
+
+    const albumsRes = await app.inject({ method: 'GET', url: '/api/albums', headers: auth() });
+    const v1 = albumsRes.json().albums.find((a: any) => a.title === 'Vault [V1]');
+    expect(v1).toBeTruthy();
+
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/api/albums/${v1.id}`,
+      headers: auth(),
+    });
+    const body = detail.json();
+    expect(body.baseTitle).toBe('Vault');
+    expect(body.versionLabel).toBe('V1');
+    expect(body.versions.map((v: any) => v.label).sort()).toEqual(['V1', 'V2']);
+    expect(body.versions.find((v: any) => v.label === 'V2').trackCount).toBe(1);
   });
 
   it('returns artist detail with their tracks', async () => {

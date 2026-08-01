@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { AlbumDetail } from '@baes/core';
 import { useAuth } from '../../src/auth';
@@ -62,11 +62,34 @@ export default function AlbumScreen() {
               style={[styles.art, styles.artPlaceholder]}
               placeholder={<Ionicons name="disc" size={64} color="#444" />}
             />
-            <Text style={styles.title}>{album.title}</Text>
+            <Text style={styles.title}>
+              {album.versions.length ? album.baseTitle : album.title}
+            </Text>
             <Text style={styles.meta}>
               {album.artistName ?? 'Unknown artist'}
               {album.year ? ` · ${album.year}` : ''} · {album.tracks.length} tracks · {totalMin} min
             </Text>
+            {album.versions.length > 1 && (
+              <View style={styles.versionRow}>
+                {album.versions.map((v) => {
+                  const active = v.id === album.id;
+                  return (
+                    <Pressable
+                      key={v.id}
+                      style={[styles.versionChip, active && styles.versionChipActive]}
+                      onPress={() => !active && router.replace(`/album/${v.id}`)}
+                    >
+                      <Text style={[styles.versionText, active && styles.versionTextActive]}>
+                        {v.label}
+                      </Text>
+                      <Text style={[styles.versionCount, active && styles.versionTextActive]}>
+                        {v.trackCount}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Pressable
                 style={styles.playAll}
@@ -123,6 +146,26 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   playAllText: { color: '#000', fontWeight: '700', fontSize: 15 },
+  versionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  versionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#17171d',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  versionChipActive: { backgroundColor: '#fff' },
+  versionText: { color: '#bbb', fontSize: 13, fontWeight: '700' },
+  versionTextActive: { color: '#000' },
+  versionCount: { color: '#666', fontSize: 12 },
   downloadAll: {
     flexDirection: 'row',
     alignItems: 'center',

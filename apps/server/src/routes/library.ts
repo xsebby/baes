@@ -11,6 +11,17 @@ interface RouteOpts {
   config: Config;
 }
 
+/**
+ * Albums whose titles differ only by a trailing bracketed suffix are treated as
+ * versions of one release — the naming convention unreleased collections
+ * already use ("Whole Lotta Red [V1]", "... [V2]").
+ */
+function splitAlbumVersion(title: string): { base: string; label: string | null } {
+  const m = /^(.+?)\s*[[(]([^\])]{1,24})[\])]\s*$/.exec(title);
+  if (m?.[1] && m[2]) return { base: m[1].trim(), label: m[2].trim() };
+  return { base: title.trim(), label: null };
+}
+
 const listQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(500).default(200),
   offset: z.coerce.number().min(0).default(0),
@@ -131,8 +142,43 @@ export const libraryRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, co
       .leftJoin(albums, eq(tracks.albumId, albums.id))
       .where(and(eq(tracks.albumId, id), isNull(tracks.deletedAt)))
       .orderBy(asc(tracks.discNo), asc(tracks.trackNo), asc(tracks.title));
+    // Sibling versions: same artist, same base title.
+    const { base } = splitAlbumVersion(album.title);
+    const siblings = await db
+      .select({
+        id: albums.id,
+        title: albums.title,
+        hasArt: sql<boolean>`${albums.artPath} is not null`,
+        trackCount: sql<number>`count(${tracks.id})::int`,
+      })
+      .from(albums)
+      .leftJoin(tracks, and(eq(tracks.albumId, albums.id), isNull(tracks.deletedAt)))
+      .where(
+        and(
+          isNull(albums.deletedAt),
+          album.artistId ? eq(albums.artistId, album.artistId) : isNull(albums.artistId),
+        ),
+      )
+      .groupBy(albums.id, albums.title, albums.artPath);
+
+    const versions = siblings
+      .map((s) => ({ ...s, split: splitAlbumVersion(s.title) }))
+      .filter((s) => s.split.base.toLowerCase() === base.toLowerCase() && s.trackCount > 0)
+      .map((s) => ({
+        id: s.id,
+        label: s.split.label ?? 'Original',
+        trackCount: s.trackCount,
+        artUrl: s.hasArt
+          ? mediaPath('art', s.id, config.SERVER_SECRET, config.MEDIA_URL_TTL_SECONDS).url
+          : null,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+
     return {
       ...album,
+      baseTitle: base,
+      versionLabel: splitAlbumVersion(album.title).label,
+      versions: versions.length > 1 ? versions : [],
       artUrl: album.hasArt
         ? mediaPath('art', album.id, config.SERVER_SECRET, config.MEDIA_URL_TTL_SECONDS).url
         : null,

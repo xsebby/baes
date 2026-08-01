@@ -416,11 +416,24 @@ export function AlbumView({ id, navigate, onAddToPlaylist }: ViewProps & { id: s
           <div className="cover">◎</div>
         )}
         <div>
-          <h2>{album.title}</h2>
+          <h2>{album.versions.length ? album.baseTitle : album.title}</h2>
           <div className="sub">
             {album.artistName ?? 'Unknown artist'}
             {album.year ? ` · ${album.year}` : ''} · {album.tracks.length} tracks
           </div>
+          {album.versions.length > 1 && (
+            <div className="version-row">
+              {album.versions.map((v) => (
+                <button
+                  key={v.id}
+                  className={`opt${v.id === album.id ? ' active' : ''}`}
+                  onClick={() => navigate({ type: 'album', id: v.id })}
+                >
+                  {v.label} <span className="muted small">{v.trackCount}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="actions">
             <PlayAllButton tracks={album.tracks} />
             <label className="iconbtn" style={{ cursor: 'pointer' }}>

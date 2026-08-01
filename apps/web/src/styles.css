@@ -1272,3 +1272,17 @@ body.electron.vibrancy.panels-tinted .main-col {
 body.electron.vibrancy.panels-tinted .sidebar {
   background: color-mix(in srgb, var(--accent) 10%, rgb(16 16 20 / 0.25));
 }
+
+/* ==== album version selector ==== */
+.version-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.version-row .opt {
+  cursor: pointer;
+}
+.version-row .opt.active .small {
+  color: rgba(0, 0, 0, 0.55);
+}

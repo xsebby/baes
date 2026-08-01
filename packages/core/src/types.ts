@@ -68,7 +68,20 @@ export interface AlbumSummary {
   artUrl: string | null;
 }
 
+export interface AlbumVersion {
+  id: string;
+  label: string;
+  trackCount: number;
+  artUrl: string | null;
+}
+
 export interface AlbumDetail extends Omit<AlbumSummary, 'trackCount'> {
+  /** Title with any trailing version suffix removed. */
+  baseTitle: string;
+  /** e.g. "V1" when the album title carries a bracketed version marker. */
+  versionLabel: string | null;
+  /** Sibling versions of the same release; empty when there is only one. */
+  versions: AlbumVersion[];
   tracks: Track[];
 }
 

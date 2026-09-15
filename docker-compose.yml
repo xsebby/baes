@@ -15,6 +15,9 @@ services:
       retries: 10
 
   server:
+    # Built and pushed by CI on every push to main; `docker compose up --build`
+    # still builds it locally under the same name.
+    image: ghcr.io/xsebby/baes-server:latest
     build:
       context: .
       dockerfile: apps/server/Dockerfile

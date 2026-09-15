@@ -17,11 +17,14 @@ RUN pnpm --filter @baes/db build && pnpm --filter @baes/core build && pnpm --fil
 RUN pnpm --filter @baes/server deploy --prod --legacy /app
 
 FROM node:22-slim
+ARG GIT_SHA=dev
+LABEL org.opencontainers.image.source=https://github.com/xsebby/baes
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl ca-certificates && rm -rf /var/lib/apt/lists/* \
     && curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o /usr/local/bin/yt-dlp \
     && chmod +x /usr/local/bin/yt-dlp
 WORKDIR /app
 ENV NODE_ENV=production
+ENV APP_COMMIT=$GIT_SHA
 COPY --from=build /app .
 COPY --from=build /repo/apps/web/dist ./public
 # Volume mount points must exist and belong to the runtime user before the

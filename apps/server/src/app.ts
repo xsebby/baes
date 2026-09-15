@@ -38,7 +38,12 @@ export async function buildApp(config: Config) {
 
   const scanner = new LibraryScanner(db, path.join(config.DATA_DIR, 'art'));
 
-  app.get('/api/health', async () => ({ status: 'ok' as const, version: APP_VERSION }));
+  app.get('/api/health', async () => ({
+    status: 'ok' as const,
+    version: APP_VERSION,
+    // Stamped into the image by CI so the deploy job can verify what is live.
+    commit: process.env.APP_COMMIT ?? 'dev',
+  }));
 
   await app.register(authRoutes, { db, config });
   await app.register(adminRoutes, { db, config, scanner });

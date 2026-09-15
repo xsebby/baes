@@ -1,5 +1,7 @@
 # baes
 
+[![CI/CD](https://github.com/xsebby/baes/actions/workflows/ci.yml/badge.svg)](https://github.com/xsebby/baes/actions/workflows/ci.yml)
+
 Self-hosted music streaming for unreleased tracks and local files, with Spotify library mirroring.
 
 ## Layout
@@ -50,5 +52,9 @@ pnpm -r test
 cp .env.example .env   # fill in POSTGRES_PASSWORD, SERVER_SECRET, DOMAIN
 docker compose up -d --build
 ```
+
+After that, every push to `main` deploys itself: CI runs the checks, builds the
+server image to GHCR, SSHes into the VPS, and verifies the live `/api/health`
+reports the new commit. See [DEPLOY.md](DEPLOY.md#continuous-deployment).
 
 Caddy terminates TLS for `$DOMAIN` and proxies to the API. Mount your music folders into the `server` service (see the commented volume in `docker-compose.yml`).

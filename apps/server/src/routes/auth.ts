@@ -19,6 +19,45 @@ const credentialsSchema = z.object({
 
 const redeemSchema = credentialsSchema.extend({ token: z.string().min(1) });
 
+/**
+ * Per-account lockout on top of the per-IP rate limit: an attacker rotating
+ * IPs still gets only LOCKOUT_FAILURES guesses per account per window. In
+ * memory (one server process); a restart clears it, which is fine.
+ */
+const LOCKOUT_FAILURES = 5;
+const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
+
+class LoginLockout {
+  private failures = new Map<string, { count: number; firstAt: number; lockedUntil: number }>();
+
+  /** Milliseconds until `username` may try again, or 0. */
+  lockedFor(username: string, now = Date.now()): number {
+    const f = this.failures.get(username.toLowerCase());
+    return f && f.lockedUntil > now ? f.lockedUntil - now : 0;
+  }
+
+  fail(username: string, now = Date.now()): void {
+    const key = username.toLowerCase();
+    const f = this.failures.get(key);
+    if (!f || now - f.firstAt > LOCKOUT_WINDOW_MS) {
+      this.failures.set(key, { count: 1, firstAt: now, lockedUntil: 0 });
+    } else if (++f.count >= LOCKOUT_FAILURES) {
+      f.lockedUntil = now + LOCKOUT_WINDOW_MS;
+    }
+    if (this.failures.size > 10_000) this.prune(now);
+  }
+
+  succeed(username: string): void {
+    this.failures.delete(username.toLowerCase());
+  }
+
+  private prune(now: number): void {
+    for (const [k, f] of this.failures) {
+      if (f.lockedUntil < now && now - f.firstAt > LOCKOUT_WINDOW_MS) this.failures.delete(k);
+    }
+  }
+}
+
 interface RouteOpts {
   db: Database;
   config: Config;
@@ -26,6 +65,7 @@ interface RouteOpts {
 
 export const authRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, config }) => {
   const sessionTtlMs = config.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
+  const lockout = new LoginLockout();
 
   async function createSession(userId: string, deviceName: string | undefined) {
     const { token, tokenHash } = generateToken();
@@ -42,6 +82,12 @@ export const authRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, confi
   function userDto(u: typeof users.$inferSelect) {
     return { id: u.id, username: u.username, role: u.role, canDownload: u.canDownload };
   }
+
+  /** Public: lets the sign-in page offer owner setup only on a brand-new server. */
+  app.get('/api/auth/status', async () => {
+    const [countRow] = await db.select({ count: sql<number>`count(*)::int` }).from(users);
+    return { needsSetup: (countRow?.count ?? 0) === 0 };
+  });
 
   // First-run bootstrap: creates the owner account. Only works while zero users exist.
   app.post(
@@ -78,6 +124,16 @@ export const authRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, confi
       if (!body.success) {
         return reply.code(400).send({ error: 'invalid_request', message: body.error.message });
       }
+      const wait = lockout.lockedFor(body.data.username);
+      if (wait > 0) {
+        return reply
+          .code(429)
+          .header('retry-after', String(Math.ceil(wait / 1000)))
+          .send({
+            error: 'locked',
+            message: `Too many failed logins; try again in ${Math.ceil(wait / 60000)} min`,
+          });
+      }
       const [user] = await db
         .select()
         .from(users)
@@ -89,10 +145,13 @@ export const authRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, confi
         ? await verifyPassword(user.pwHash, body.data.password)
         : (await hashPassword('timing-equalizer'), false);
       if (!user || !ok) {
+        // Unknown usernames count too, so lockout doesn't reveal which exist.
+        lockout.fail(body.data.username);
         return reply
           .code(401)
           .send({ error: 'invalid_credentials', message: 'Wrong username or password' });
       }
+      lockout.succeed(body.data.username);
       const { token, expiresAt } = await createSession(user.id, body.data.deviceName);
       return { token, user: userDto(user), expiresAt: expiresAt.toISOString() };
     },

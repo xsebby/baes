@@ -185,6 +185,10 @@ export default function Admin() {
         </>
       )}
 
+      <Pressable style={styles.linkRow} onPress={() => router.push('/shares')}>
+        <Text style={styles.linkText}>Shared links</Text>
+        <Text style={styles.linkChevron}>›</Text>
+      </Pressable>
       <Pressable style={styles.linkRow} onPress={() => router.push('/duplicates')}>
         <Text style={styles.linkText}>Possible duplicates</Text>
         <Text style={styles.linkChevron}>›</Text>

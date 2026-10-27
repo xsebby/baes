@@ -160,6 +160,42 @@ export interface TagSummary {
   label: string | null;
 }
 
+export interface ShareLink {
+  id: string;
+  token: string;
+  kind: 'playlist' | 'track';
+  targetId: string;
+  title: string;
+  url: string;
+  allowDownload: boolean;
+  views: number;
+  expiresAt: string | null;
+  createdAt: string;
+  expired?: boolean;
+}
+
+export interface SharedItem {
+  id: string;
+  title: string;
+  tag: string | null;
+  durationMs: number;
+  artistName: string | null;
+  albumTitle: string | null;
+  streamUrl: string;
+  artUrl: string | null;
+  downloadUrl: string | null;
+}
+
+/** What anyone holding a share link sees. */
+export interface SharedView {
+  kind: 'playlist' | 'track';
+  title: string;
+  artUrl: string | null;
+  allowDownload: boolean;
+  expiresAt: string | null;
+  items: SharedItem[];
+}
+
 export interface RecentPlay {
   track: Track;
   playedAt: string;

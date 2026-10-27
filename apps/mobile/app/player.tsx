@@ -14,13 +14,13 @@ import Slider from '@react-native-community/slider';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../src/auth';
 import { formatSeconds, usePlayer } from '../src/player';
 
 export default function NowPlaying() {
-  const { client } = useAuth();
+  const { client, user } = useAuth();
   const insets = useSafeAreaInsets();
   const {
     current,
@@ -109,6 +109,25 @@ export default function NowPlaying() {
     <View
       style={[styles.container, { paddingTop: 24 + insets.top, paddingBottom: 24 + insets.bottom }]}
     >
+      {user?.role === 'owner' && (
+        <Stack.Screen
+          options={{
+            headerRight: () => (
+              <Pressable
+                hitSlop={10}
+                onPress={() =>
+                  router.push({
+                    pathname: '/share',
+                    params: { kind: 'track', id: current.id, title: current.title },
+                  })
+                }
+              >
+                <Ionicons name="share-outline" size={22} color="#fff" />
+              </Pressable>
+            ),
+          }}
+        />
+      )}
       <LinearGradient
         colors={[colors[0] ?? '#1b1730', '#0b0b0f']}
         style={StyleSheet.absoluteFill}

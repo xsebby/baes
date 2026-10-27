@@ -81,7 +81,12 @@ async function ensureCompatFile(
 export const streamRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, config }) => {
   app.get('/api/stream/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const { exp, sig, profile } = req.query as { exp?: string; sig?: string; profile?: string };
+    const { exp, sig, profile, download } = req.query as {
+      exp?: string;
+      sig?: string;
+      profile?: string;
+      download?: string;
+    };
     if (!exp || !sig || !verifyMedia(config.SERVER_SECRET, 'stream', id, Number(exp), sig)) {
       return reply.code(403).send({ error: 'forbidden', message: 'Invalid or expired URL' });
     }
@@ -125,6 +130,14 @@ export const streamRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
 
     reply.header('Accept-Ranges', 'bytes');
     reply.header('ETag', `"${row.contentHash}"`);
+    // Same signed URL, saved as a file under its real name (share downloads).
+    // Not a permission: anything streamable can be saved anyway.
+    if (download === '1') {
+      reply.header(
+        'Content-Disposition',
+        `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(row.relPath))}`,
+      );
+    }
     reply.header('Cache-Control', 'private, max-age=0');
 
     const range = req.headers.range;

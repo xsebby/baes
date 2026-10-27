@@ -10,6 +10,7 @@ import { LibraryWatcher } from './library/watcher.js';
 import { DuplicateFinder } from './library/duplicates.js';
 import { backfillTags } from './library/tags.js';
 import { duplicateRoutes } from './routes/duplicates.js';
+import { shareRoutes } from './routes/shares.js';
 import authPlugin from './plugins/auth.js';
 import { authRoutes } from './routes/auth.js';
 import { ingestRoutes } from './routes/ingest.js';
@@ -83,6 +84,7 @@ export async function buildApp(config: Config) {
   await app.register(authRoutes, { db, config });
   await app.register(adminRoutes, { db, config, scanner });
   await app.register(duplicateRoutes, { db, config, duplicates });
+  await app.register(shareRoutes, { db, config });
   await app.register(ingestRoutes, { db, config, scanner });
   await app.register(libraryRoutes, { db, config });
   await app.register(playlistRoutes, { db, config });

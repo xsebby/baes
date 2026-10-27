@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './state';
 import { PlayerProvider } from './player';
 import { AddToPlaylistModal, LikesProvider, PlayerBar } from './components';
 import { FullscreenPlayer } from './Fullscreen';
+import { Landing, SharePage } from './public';
 import { ACCENTS, applyTheme, loadTheme, saveTheme, type ThemeSettings } from './theme';
 import {
   AdminView,
@@ -245,8 +246,15 @@ function AppearanceModal({ onClose }: { onClose: () => void }) {
 
 function Gate() {
   const { ready, user } = useAuth();
+  const [signingIn, setSigningIn] = useState(false);
   if (!ready) return <div className="empty">Loading…</div>;
-  if (!user) return <Login />;
+  if (!user) {
+    // The desktop app opens straight to sign-in; the website shows the landing page first.
+    if (signingIn || navigator.userAgent.includes('Electron')) {
+      return <Login onBack={() => setSigningIn(false)} />;
+    }
+    return <Landing onSignIn={() => setSigningIn(true)} />;
+  }
   return (
     <PlayerProvider>
       <LikesProvider>
@@ -257,6 +265,9 @@ function Gate() {
 }
 
 export default function App() {
+  // Share links work without an account, so they bypass auth entirely.
+  const share = /^\/s\/([A-Za-z0-9_-]+)\/?$/.exec(window.location.pathname);
+  if (share) return <SharePage token={share[1]!} />;
   return (
     <AuthProvider>
       <Gate />

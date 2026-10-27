@@ -16,6 +16,8 @@ import type {
   RecentPlay,
   DuplicateGroup,
   TagSummary,
+  ShareLink,
+  SharedView,
   DuplicateStatus,
   RedeemInviteRequest,
   ImportJob,
@@ -146,6 +148,33 @@ export class ApiClient {
 
   reportPlays(events: PlayEventInput[]): Promise<void> {
     return this.request('POST', '/api/plays', { events });
+  }
+
+  authStatus(): Promise<{ needsSetup: boolean }> {
+    return this.request('GET', '/api/auth/status');
+  }
+
+  createShare(opts: {
+    kind: 'playlist' | 'track';
+    targetId: string;
+    allowDownload?: boolean;
+    /** null = never expires */
+    expiresInDays?: number | null;
+  }): Promise<ShareLink> {
+    return this.request('POST', '/api/shares', opts);
+  }
+
+  listShares(): Promise<{ shares: ShareLink[] }> {
+    return this.request('GET', '/api/shares');
+  }
+
+  revokeShare(id: string): Promise<void> {
+    return this.request('DELETE', `/api/shares/${id}`);
+  }
+
+  /** Public: no token needed. */
+  openShare(token: string): Promise<SharedView> {
+    return this.request('GET', `/api/s/${encodeURIComponent(token)}`);
   }
 
   listTags(): Promise<{ tags: TagSummary[] }> {

@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Linking } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { PlaylistDetail } from '@baes/core';
 import { useAuth } from '../../src/auth';
@@ -21,7 +21,7 @@ import { readCache, writeCache } from '../../src/offline';
 
 export default function PlaylistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { client } = useAuth();
+  const { client, user } = useAuth();
   const { playTrack } = usePlayer();
   const { download, isDownloaded, queueLength } = useDownloads();
   const [playlist, setPlaylist] = useState<PlaylistDetail | null>(null);
@@ -113,13 +113,28 @@ export default function PlaylistScreen() {
       <Stack.Screen
         options={{
           title: playlist.title,
-          headerRight: isMirror
-            ? undefined
-            : () => (
+          headerRight: () => (
+            <View style={styles.headerActions}>
+              {user?.role === 'owner' && (
+                <Pressable
+                  hitSlop={10}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/share',
+                      params: { kind: 'playlist', id: playlist.id, title: playlist.title },
+                    })
+                  }
+                >
+                  <Ionicons name="share-outline" size={22} color="#8ab4ff" />
+                </Pressable>
+              )}
+              {!isMirror && (
                 <Pressable onPress={editing ? finishEditing : startEditing} hitSlop={10}>
                   <Text style={styles.editButton}>{editing ? 'Done' : 'Edit'}</Text>
                 </Pressable>
-              ),
+              )}
+            </View>
+          ),
         }}
       />
       <FlatList
@@ -226,6 +241,7 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 26, fontWeight: '800' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   editButton: { color: '#8ab4ff', fontSize: 16, fontWeight: '600' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 18 },
   editControls: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   meta: { color: '#888', fontSize: 13 },
   playAll: {

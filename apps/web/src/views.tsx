@@ -34,8 +34,19 @@ interface ViewProps {
 
 // ---- login ----
 
-export function Login() {
-  const { signIn } = useAuth();
+export function Login({ onBack }: { onBack?: () => void } = {}) {
+  const { signIn, client } = useAuth();
+  // Only a brand-new server offers owner setup; otherwise it's just sign-in.
+  const [needsSetup, setNeedsSetup] = useState(false);
+  useEffect(() => {
+    client
+      .authStatus()
+      .then((s) => {
+        setNeedsSetup(s.needsSetup);
+        if (s.needsSetup) setSetup(true);
+      })
+      .catch(() => {});
+  }, [client]);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [setup, setSetup] = useState(false);
@@ -76,9 +87,16 @@ export function Login() {
         <button className="primary" disabled={busy || username.length < 2 || password.length < 10}>
           {setup ? 'Create & sign in' : 'Sign in'}
         </button>
-        <button type="button" className="toggle" onClick={() => setSetup((v) => !v)}>
-          {setup ? 'Already set up? Sign in' : 'Fresh server? Create owner account'}
-        </button>
+        {needsSetup && (
+          <button type="button" className="toggle" onClick={() => setSetup((v) => !v)}>
+            {setup ? 'Already set up? Sign in' : 'Fresh server? Create owner account'}
+          </button>
+        )}
+        {onBack && (
+          <button type="button" className="toggle" onClick={onBack}>
+            ← Back
+          </button>
+        )}
       </form>
     </div>
   );

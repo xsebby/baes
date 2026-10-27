@@ -42,6 +42,11 @@ export default function RootLayout() {
               <Stack.Screen name="downloads" options={{ title: '' }} />
               <Stack.Screen name="recent" options={{ title: '' }} />
               <Stack.Screen name="duplicates" options={{ title: '' }} />
+              <Stack.Screen name="shares" options={{ title: '' }} />
+              <Stack.Screen
+                name="share"
+                options={{ title: 'Share', presentation: 'modal', headerShown: true }}
+              />
             </Stack>
           </PlayerProvider>
         </DownloadsProvider>

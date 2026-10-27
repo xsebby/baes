@@ -380,3 +380,33 @@ export const tagLabels = pgTable('tag_labels', {
   tag: text('tag').primaryKey(),
   label: text('label').notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// Share links
+// ---------------------------------------------------------------------------
+
+export const shareKind = pgEnum('share_kind', ['playlist', 'track']);
+
+/**
+ * An unlisted link that lets anyone holding it stream (and optionally
+ * download) one playlist or track without an account. The token is the
+ * capability, so it's long and random; revoking or expiring it ends access.
+ */
+export const shares = pgTable(
+  'shares',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    token: text('token').notNull(),
+    kind: shareKind('kind').notNull(),
+    targetId: uuid('target_id').notNull(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    allowDownload: boolean('allow_download').notNull().default(true),
+    views: integer('views').notNull().default(0),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('shares_token_idx').on(t.token)],
+);

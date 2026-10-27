@@ -360,7 +360,10 @@ describe('streaming', () => {
 
   it('rejects tampered signatures', async () => {
     const url = await getStreamUrl();
-    const tampered = url.replace(/sig=./, 'sig=X');
+    // Change the first signature character to a *different* one: replacing it
+    // with a fixed 'X' was a no-op whenever the signature already started with
+    // X (1 run in 64), which made this test flaky.
+    const tampered = url.replace(/sig=(.)/, (_, c: string) => `sig=${c === 'X' ? 'Y' : 'X'}`);
     const res = await app.inject({ method: 'GET', url: tampered });
     expect(res.statusCode).toBe(403);
   });

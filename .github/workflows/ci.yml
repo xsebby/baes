@@ -101,6 +101,8 @@ jobs:
           echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
           docker compose pull --quiet server
           docker compose up -d --no-build server
+          mkdir -p backups
+          docker compose up -d backup
           docker logout ghcr.io >/dev/null
           docker image prune -f >/dev/null
           EOF

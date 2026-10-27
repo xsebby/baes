@@ -93,7 +93,11 @@ module.exports = function withSceneDelegate(config) {
     'ios',
     async (cfg) => {
       const projectName = IOSConfig.XcodeUtils.getProjectName(cfg.modRequest.projectRoot);
-      const file = path.join(cfg.modRequest.platformProjectRoot, projectName, 'SceneDelegate.swift');
+      const file = path.join(
+        cfg.modRequest.platformProjectRoot,
+        projectName,
+        'SceneDelegate.swift',
+      );
       fs.writeFileSync(file, SCENE_DELEGATE);
       return cfg;
     },

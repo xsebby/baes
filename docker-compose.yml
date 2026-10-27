@@ -38,6 +38,25 @@ services:
       - app-data:/app/.data
       - transcode-cache:/app/transcode-cache
 
+  # Nightly pg_dump + art to ./backups (see scripts/backup.sh). Runs as the
+  # host's baes user (uid 1000, same as the image's node user) so it can read
+  # app-data and the backups stay readable for scripts/pull-backup.sh.
+  backup:
+    image: postgres:16
+    restart: unless-stopped
+    user: '1000:1000'
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-7}
+    entrypoint: ['sh', '/backup.sh']
+    volumes:
+      - ./scripts/backup.sh:/backup.sh:ro
+      - ./backups:/backups
+      - app-data:/app-data:ro
+
   caddy:
     image: caddy:2
     restart: unless-stopped

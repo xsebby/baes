@@ -50,8 +50,9 @@ your music folder into `/srv/music`.
 
 **Continuous sync (recommended):** install [Syncthing](https://syncthing.net) on
 the PC and the VPS, share your music folder → `/srv/music`. Anything you drop in
-the folder on the PC appears on the VPS; a rescan picks it up in the app.
-(A filesystem watcher that auto-rescans is on the roadmap.)
+the folder on the PC appears on the VPS, and the server rescans by itself about
+30 seconds after files stop arriving (set `WATCH_LIBRARY=false` in `.env` to
+turn that off).
 
 ## Continuous deployment
 
@@ -90,10 +91,40 @@ and delete the local copy. The workflow pins the VPS host key, so update the
 cd ~/baes && git pull && docker compose up -d --build
 ```
 
+## Backups
+
+The `backup` service (`scripts/backup.sh`) writes `~/baes/backups/<stamp>/`
+every night at 04:00 UTC, keeping 7 days (`BACKUP_KEEP_DAYS` in `.env`):
+`baes.pgdump` (the whole database) and `art.tar.gz` (art and custom covers).
+
+Uploaded and URL-imported audio lives in the `app-data` volume and is too big
+to duplicate on the droplet, so it's backed up off-box. From your Mac
+(`brew install rsync` first; macOS's bundled rsync can't talk to the server):
+
+```bash
+scripts/pull-backup.sh            # → ~/baes-backups/{nightly,uploads}
+```
+
+It's incremental, so run it whenever you've imported something.
+
+### Restore
+
+```bash
+# database: from ~/baes on the VPS
+docker compose stop server
+docker compose exec -T db pg_restore -U baes -d baes --clean --if-exists < backups/<stamp>/baes.pgdump
+docker compose start server
+
+# art/covers and uploads back into the volume
+docker run --rm -i -v baes_app-data:/d alpine tar -C /d -xzf - < backups/<stamp>/art.tar.gz
+rsync -a ~/baes-backups/uploads/ baes@VPS:/tmp/uploads/   # from the Mac, then on the VPS:
+docker run --rm -v /tmp/uploads:/src:ro -v baes_app-data:/d alpine cp -a /src/. /d/uploads/
+```
+
 ## Notes
 
-- Postgres data, extracted art, and the transcode cache live in named Docker
-  volumes (`docker volume ls`). Nightly `pg_dump` backup script: TODO (M5).
+- Postgres data, extracted art, uploads, and the transcode cache live in named
+  Docker volumes (`docker volume ls`). See [Backups](#backups).
 - The stream/art URLs are HMAC-signed and expire hourly; nothing serves bytes
   without a valid signature. Auth endpoints are rate-limited.
 - Tighter lockdown (optional): install Tailscale on the VPS + your devices and

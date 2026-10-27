@@ -14,6 +14,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.baes.mobile",
+      "appleTeamId": "8S7FALUYB9",
       "infoPlist": {
         "UIBackgroundModes": ["audio"]
       }
@@ -41,7 +42,8 @@
         {
           "enableBackgroundPlayback": true
         }
-      ]
+      ],
+      "./plugins/with-scene-delegate"
     ]
   }
 }

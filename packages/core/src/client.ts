@@ -15,6 +15,7 @@ import type {
   PlaylistSummary,
   RecentPlay,
   DuplicateGroup,
+  TagSummary,
   DuplicateStatus,
   RedeemInviteRequest,
   ImportJob,
@@ -145,6 +146,14 @@ export class ApiClient {
 
   reportPlays(events: PlayEventInput[]): Promise<void> {
     return this.request('POST', '/api/plays', { events });
+  }
+
+  listTags(): Promise<{ tags: TagSummary[] }> {
+    return this.request('GET', '/api/tags');
+  }
+
+  setTagLabel(tag: string, label: string): Promise<void> {
+    return this.request('PUT', `/api/tags/${encodeURIComponent(tag)}`, { label });
   }
 
   listDuplicates(): Promise<{ status: DuplicateStatus; groups: DuplicateGroup[] }> {

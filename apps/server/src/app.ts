@@ -8,6 +8,7 @@ import { createDb } from './db.js';
 import { LibraryScanner } from './library/scanner.js';
 import { LibraryWatcher } from './library/watcher.js';
 import { DuplicateFinder } from './library/duplicates.js';
+import { backfillTags } from './library/tags.js';
 import { duplicateRoutes } from './routes/duplicates.js';
 import authPlugin from './plugins/auth.js';
 import { authRoutes } from './routes/auth.js';
@@ -54,6 +55,12 @@ export async function buildApp(config: Config) {
     app.log.warn({ fpBin: config.FP_BIN }, 'FP_BIN not found; duplicate detection is off');
   }
   scanner.onFinished = () => duplicates.start();
+
+  // Titles imported before tags existed still lead with their emoji.
+  app.addHook('onReady', async () => {
+    const n = await backfillTags(db);
+    if (n > 0) app.log.info({ tracks: n }, 'moved title emoji into tags');
+  });
 
   // Rescan automatically when files land in a library root.
   if (config.WATCH_LIBRARY && config.NODE_ENV !== 'test') {

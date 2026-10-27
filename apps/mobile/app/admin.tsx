@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import type { LibraryRoot, ScanStatus } from '@baes/core';
+import type { LibraryRoot, ScanStatus, TagSummary } from '@baes/core';
 import { useAuth } from '../src/auth';
 
 export default function Admin() {
@@ -9,15 +9,21 @@ export default function Admin() {
   const [roots, setRoots] = useState<LibraryRoot[]>([]);
   const [newPath, setNewPath] = useState('');
   const [scan, setScan] = useState<ScanStatus | null>(null);
+  const [tags, setTags] = useState<TagSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {
     if (!client) return;
     try {
-      const [rootsRes, scanRes] = await Promise.all([client.listRoots(), client.scanStatus()]);
+      const [rootsRes, scanRes, tagsRes] = await Promise.all([
+        client.listRoots(),
+        client.scanStatus(),
+        client.listTags(),
+      ]);
       setRoots(rootsRes.roots.filter((r) => r.enabled));
       setScan(scanRes);
+      setTags(tagsRes.tags);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     }
@@ -74,6 +80,20 @@ export default function Admin() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to start scan');
     }
+  }
+
+  function renameTag(t: TagSummary) {
+    Alert.prompt?.(
+      `Name for ${t.tag}`,
+      'What this marker means on your trackers.',
+      async (label) => {
+        if (!client || !label?.trim()) return;
+        await client.setTagLabel(t.tag, label.trim());
+        refresh();
+      },
+      'plain-text',
+      t.label ?? '',
+    );
   }
 
   async function handleSignOut() {
@@ -149,6 +169,22 @@ export default function Admin() {
         <Text style={styles.scanButtonText}>{scan?.running ? 'Scanning…' : 'Scan now'}</Text>
       </Pressable>
 
+      {tags.length > 0 && (
+        <>
+          <Text style={styles.section}>Tags</Text>
+          <View style={styles.tagRow}>
+            {tags.map((t) => (
+              <Pressable key={t.tag} style={styles.tagChip} onPress={() => renameTag(t)}>
+                <Text style={styles.tagChipText}>
+                  {t.tag} {t.label ?? 'Unnamed'} · {t.count}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.hint}>Tap a tag to rename it.</Text>
+        </>
+      )}
+
       <Pressable style={styles.linkRow} onPress={() => router.push('/duplicates')}>
         <Text style={styles.linkText}>Possible duplicates</Text>
         <Text style={styles.linkChevron}>›</Text>
@@ -208,6 +244,15 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.4 },
   scanButtonText: { color: '#000', fontWeight: '700', fontSize: 15 },
   error: { color: '#ff6b6b', marginTop: 12 },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 6 },
+  tagChip: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#26262e',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  tagChipText: { color: '#ddd', fontSize: 13 },
   linkRow: {
     flexDirection: 'row',
     alignItems: 'center',

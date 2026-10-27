@@ -6,6 +6,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { parseFile, type IAudioMetadata } from 'music-metadata';
 import { albums, artists, libraryRoots, tracks } from '@baes/db';
 import type { Database } from '../db.js';
+import { splitTag } from './tags.js';
 
 const AUDIO_EXTENSIONS = new Set([
   '.mp3',
@@ -180,7 +181,9 @@ export class LibraryScanner {
     const common = meta?.common;
     const format = meta?.format;
 
-    const title = common?.title?.trim() || inferred.title;
+    const fullTitle = common?.title?.trim() || inferred.title;
+    // Tracker titles lead with a marker emoji; keep it as a tag instead.
+    const { title, tag } = splitTag(fullTitle);
     const artistName = common?.artist?.trim() || inferred.artist;
     const albumTitle = common?.album?.trim() || null;
     const needsReview = !common?.title || !common?.artist;
@@ -205,6 +208,8 @@ export class LibraryScanner {
       relPath,
       contentHash,
       title,
+      tag,
+      rawTitle: tag ? fullTitle : null,
       artistId,
       albumId,
       trackNo: common?.track?.no ?? null,

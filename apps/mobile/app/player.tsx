@@ -151,6 +151,7 @@ export default function NowPlaying() {
         <View style={styles.likeSlot} />
         <View style={styles.meta}>
           <Text style={styles.title} numberOfLines={2}>
+            {current.tag ? `${current.tag} ` : ''}
             {current.title}
           </Text>
           <Text style={styles.artist} numberOfLines={1}>

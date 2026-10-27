@@ -6,6 +6,7 @@ import {
   Image,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,7 +14,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { AlbumSummary, ArtistSummary, PlaylistSummary, Track } from '@baes/core';
+import type { AlbumSummary, ArtistSummary, PlaylistSummary, TagSummary, Track } from '@baes/core';
 import { useAuth } from '../src/auth';
 import { useDownloads } from '../src/downloads';
 import { usePlayer } from '../src/player';
@@ -32,6 +33,8 @@ export default function Library() {
   const [albums, setAlbums] = useState<AlbumSummary[]>([]);
   const [artists, setArtists] = useState<ArtistSummary[]>([]);
   const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
+  const [tags, setTags] = useState<TagSummary[]>([]);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -44,12 +47,15 @@ export default function Library() {
       if (!client) return;
       setError(null);
       try {
-        const [t, al, ar, pl] = await Promise.all([
+        const [t, al, ar, pl, tg] = await Promise.all([
           client.listTracks({ q: q || undefined, limit: 500 }),
           client.listAlbums(),
           client.listArtists(),
           client.listPlaylists(),
+          client.listTags().catch(() => ({ tags: [] as TagSummary[] })),
         ]);
+        setTags(tg.tags);
+        writeCache('tags', tg.tags);
         setTracks(t.tracks);
         setAlbums(al.albums);
         setArtists(ar.artists);
@@ -79,6 +85,7 @@ export default function Library() {
           setAlbums(ca ?? []);
           setArtists(cr ?? []);
           setPlaylists(cp ?? []);
+          setTags(readCache<TagSummary[]>('tags') ?? []);
           setOffline(true);
           setError(null);
         } else {
@@ -284,13 +291,38 @@ export default function Library() {
       );
     }
 
+    const shown = tagFilter ? tracks.filter((t) => t.tag === tagFilter) : tracks;
     return (
       <FlatList
         key="songs"
-        data={tracks}
+        data={shown}
         keyExtractor={(t) => t.id}
         refreshControl={refreshControl}
-        renderItem={({ item }) => <TrackRow track={item} queue={tracks} />}
+        ListHeaderComponent={
+          tags.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.tagChips}
+            >
+              {tags.map((t) => {
+                const on = tagFilter === t.tag;
+                return (
+                  <Pressable
+                    key={t.tag}
+                    style={[styles.tagChip, on && styles.tagChipOn]}
+                    onPress={() => setTagFilter(on ? null : t.tag)}
+                  >
+                    <Text style={[styles.tagChipText, on && styles.tagChipTextOn]}>
+                      {t.tag} {t.label ?? ''} {t.count}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null
+        }
+        renderItem={({ item }) => <TrackRow track={item} queue={shown} />}
       />
     );
   }
@@ -376,6 +408,17 @@ const styles = StyleSheet.create({
   segmentActive: { backgroundColor: '#fff' },
   segmentText: { color: '#999', fontSize: 13, fontWeight: '600' },
   segmentTextActive: { color: '#000' },
+  tagChips: { gap: 6, paddingHorizontal: 12, paddingBottom: 8 },
+  tagChip: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#26262e',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  tagChipOn: { backgroundColor: '#8ab4ff', borderColor: '#8ab4ff' },
+  tagChipText: { color: '#aaa', fontSize: 12, fontWeight: '600' },
+  tagChipTextOn: { color: '#000' },
   albumGrid: { paddingHorizontal: 12, paddingBottom: 12 },
   albumRow: { gap: 12 },
   albumCard: { flex: 1, marginBottom: 16, maxWidth: '48%' },

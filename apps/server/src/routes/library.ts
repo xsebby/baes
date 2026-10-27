@@ -7,11 +7,13 @@ import {
   artists,
   libraryRoots,
   playEvents,
+  tagLabels,
   tracks,
 } from '@baes/db';
 import type { Database } from '../db.js';
 import type { Config } from '../config.js';
 import { mediaPath } from '../library/signing.js';
+import { DEFAULT_TAG_LABELS, normalizeTag } from '../library/tags.js';
 import { z } from 'zod';
 
 interface RouteOpts {
@@ -34,12 +36,14 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(500).default(200),
   offset: z.coerce.number().min(0).default(0),
   q: z.string().optional(),
+  tag: z.string().max(32).optional(),
 });
 
 export const libraryRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, config }) => {
   const trackSelection = {
     id: tracks.id,
     title: tracks.title,
+    tag: tracks.tag,
     durationMs: tracks.durationMs,
     trackNo: tracks.trackNo,
     codec: tracks.codec,
@@ -65,13 +69,46 @@ export const libraryRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, co
     };
   }
 
+  /** Tags in use, with counts and labels (the owner's, else the built-in name). */
+  app.get('/api/tags', { preHandler: app.requireAuth }, async () => {
+    const counts = await db
+      .select({ tag: tracks.tag, count: sql<number>`count(*)::int` })
+      .from(tracks)
+      .where(and(isNull(tracks.deletedAt), isNotNull(tracks.tag)))
+      .groupBy(tracks.tag);
+    const labels = new Map((await db.select().from(tagLabels)).map((l) => [l.tag, l.label]));
+    return {
+      tags: counts
+        .map(({ tag, count }) => ({
+          tag: tag!,
+          count,
+          label: labels.get(tag!) ?? DEFAULT_TAG_LABELS[tag!] ?? null,
+        }))
+        .sort((a, b) => b.count - a.count),
+    };
+  });
+
+  app.put('/api/tags/:tag', { preHandler: app.requireOwner }, async (req, reply) => {
+    const tag = normalizeTag(decodeURIComponent((req.params as { tag: string }).tag));
+    const body = z.object({ label: z.string().trim().min(1).max(40) }).safeParse(req.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: 'invalid_request', message: body.error.message });
+    }
+    await db
+      .insert(tagLabels)
+      .values({ tag, label: body.data.label })
+      .onConflictDoUpdate({ target: tagLabels.tag, set: { label: body.data.label } });
+    return reply.code(204).send();
+  });
+
   app.get('/api/tracks', { preHandler: app.requireAuth }, async (req, reply) => {
     const query = listQuerySchema.safeParse(req.query);
     if (!query.success) {
       return reply.code(400).send({ error: 'invalid_request', message: query.error.message });
     }
-    const { limit, offset, q } = query.data;
+    const { limit, offset, q, tag } = query.data;
     const filters = [isNull(tracks.deletedAt)];
+    if (tag) filters.push(eq(tracks.tag, normalizeTag(tag)));
     if (q) {
       filters.push(
         or(

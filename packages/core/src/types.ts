@@ -45,6 +45,8 @@ export interface HealthResponse {
 export interface Track {
   id: string;
   title: string;
+  /** Tracker marker emoji moved off the title (e.g. a star for "best of"). */
+  tag: string | null;
   durationMs: number;
   trackNo: number | null;
   codec: string;
@@ -149,6 +151,13 @@ export interface DuplicateStatus {
   lastRunAt: string | null;
   lastError: string | null;
   fingerprinted: number;
+}
+
+export interface TagSummary {
+  tag: string;
+  count: number;
+  /** Owner's name for the tag, else a built-in one, else null. */
+  label: string | null;
 }
 
 export interface RecentPlay {

@@ -121,6 +121,10 @@ export const tracks = pgTable(
     contentHash: text('content_hash').notNull(),
     fingerprint: text('fingerprint'),
     title: text('title').notNull(),
+    // A tracker's marker emoji moved off the front of the title (e.g. ⭐, 🏆),
+    // and the title as it was before, so the split can be undone.
+    tag: text('tag'),
+    rawTitle: text('raw_title'),
     artistId: uuid('artist_id').references(() => artists.id),
     albumId: uuid('album_id').references(() => albums.id),
     trackNo: integer('track_no'),
@@ -370,3 +374,9 @@ export const duplicatePairs = pgTable(
   },
   (t) => [primaryKey({ columns: [t.trackA, t.trackB] })],
 );
+
+/** Owner-editable names for track tags; tags without a row use built-in defaults. */
+export const tagLabels = pgTable('tag_labels', {
+  tag: text('tag').primaryKey(),
+  label: text('label').notNull(),
+});

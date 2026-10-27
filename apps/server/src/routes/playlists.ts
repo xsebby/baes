@@ -28,6 +28,7 @@ export const playlistRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, c
   const trackSelection = {
     id: tracks.id,
     title: tracks.title,
+    tag: tracks.tag,
     durationMs: tracks.durationMs,
     trackNo: tracks.trackNo,
     codec: tracks.codec,

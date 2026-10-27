@@ -53,6 +53,7 @@ export function TrackRow({ track, queue, showArt = true, showTrackNo = false, tr
       ) : null}
       <View style={styles.meta}>
         <Text style={[styles.title, active && styles.activeTitle]} numberOfLines={1}>
+          {track.tag ? <Text style={styles.tag}>{track.tag} </Text> : null}
           {track.title}
         </Text>
         <Text style={styles.subtitle} numberOfLines={1}>
@@ -85,6 +86,7 @@ export function TrackRow({ track, queue, showArt = true, showTrackNo = false, tr
 }
 
 const styles = StyleSheet.create({
+  tag: { fontSize: 13 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

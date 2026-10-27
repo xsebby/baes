@@ -45,6 +45,7 @@ export const duplicateRoutes: FastifyPluginAsync<RouteOpts> = async (
           .select({
             id: tracks.id,
             title: tracks.title,
+            tag: tracks.tag,
             durationMs: tracks.durationMs,
             trackNo: tracks.trackNo,
             codec: tracks.codec,

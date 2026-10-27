@@ -22,6 +22,10 @@ RUN pnpm --filter @baes/server deploy --prod --legacy /app
 # server runs with duplicate detection off.
 FROM node:22-slim AS fp
 ARG FP_REF=ee6b88f34864b14db62c5ca69c8e0435b6905b78
+# Secrets aren't part of BuildKit's cache key, so a build that ran without the
+# token would be reused as-is once the token is added. CI passes whether the
+# secret is set, which puts its presence into the key.
+ARG FP_TOKEN_SET=false
 RUN apt-get update && apt-get install -y --no-install-recommends cmake ninja-build g++ curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 RUN --mount=type=secret,id=fp_token \
@@ -34,6 +38,8 @@ RUN --mount=type=secret,id=fp_token \
            -DFP_BUILD_TESTS=OFF -DFP_BUILD_BENCH=OFF \
       && cmake --build /fp/build --target fpcli \
       && cp /fp/build/fp /fp/out/fp; \
+    elif [ "$FP_TOKEN_SET" = true ]; then \
+      echo "FP_TOKEN_SET=true but no fp_token secret was mounted" >&2; exit 1; \
     else echo "no fp_token secret: building without duplicate detection"; fi
 
 FROM node:22-slim

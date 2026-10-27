@@ -60,6 +60,7 @@ jobs:
             ${{ env.IMAGE }}:${{ github.sha }}
           build-args: |
             GIT_SHA=${{ github.sha }}
+            FP_TOKEN_SET=${{ secrets.FP_REPO_TOKEN != '' }}
           # Read-only token for the private baes-fingerprint repo (see Dockerfile).
           secrets: |
             fp_token=${{ secrets.FP_REPO_TOKEN }}

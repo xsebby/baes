@@ -7,6 +7,8 @@ import type { Config } from './config.js';
 import { createDb } from './db.js';
 import { LibraryScanner } from './library/scanner.js';
 import { LibraryWatcher } from './library/watcher.js';
+import { DuplicateFinder } from './library/duplicates.js';
+import { duplicateRoutes } from './routes/duplicates.js';
 import authPlugin from './plugins/auth.js';
 import { authRoutes } from './routes/auth.js';
 import { ingestRoutes } from './routes/ingest.js';
@@ -39,6 +41,14 @@ export async function buildApp(config: Config) {
 
   const scanner = new LibraryScanner(db, path.join(config.DATA_DIR, 'art'));
 
+  const duplicates = new DuplicateFinder(
+    db,
+    config.FP_BIN,
+    path.join(config.DATA_DIR, 'fingerprints.fpdb'),
+    app.log,
+  );
+  scanner.onFinished = () => duplicates.start();
+
   // Rescan automatically when files land in a library root.
   if (config.WATCH_LIBRARY && config.NODE_ENV !== 'test') {
     const watcher = new LibraryWatcher(db, scanner, app.log);
@@ -59,6 +69,7 @@ export async function buildApp(config: Config) {
 
   await app.register(authRoutes, { db, config });
   await app.register(adminRoutes, { db, config, scanner });
+  await app.register(duplicateRoutes, { db, config, duplicates });
   await app.register(ingestRoutes, { db, config, scanner });
   await app.register(libraryRoutes, { db, config });
   await app.register(playlistRoutes, { db, config });

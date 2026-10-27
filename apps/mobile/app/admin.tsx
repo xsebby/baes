@@ -149,6 +149,11 @@ export default function Admin() {
         <Text style={styles.scanButtonText}>{scan?.running ? 'Scanning…' : 'Scan now'}</Text>
       </Pressable>
 
+      <Pressable style={styles.linkRow} onPress={() => router.push('/duplicates')}>
+        <Text style={styles.linkText}>Possible duplicates</Text>
+        <Text style={styles.linkChevron}>›</Text>
+      </Pressable>
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <Pressable style={styles.signOut} onPress={handleSignOut}>
@@ -203,6 +208,17 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.4 },
   scanButtonText: { color: '#000', fontWeight: '700', fontSize: 15 },
   error: { color: '#ff6b6b', marginTop: 12 },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: '#222',
+  },
+  linkText: { color: '#fff', fontSize: 15, flex: 1 },
+  linkChevron: { color: '#555', fontSize: 22 },
   signOut: { marginTop: 'auto', alignItems: 'center', paddingVertical: 14 },
   signOutText: { color: '#ff6b6b', fontSize: 15 },
 });

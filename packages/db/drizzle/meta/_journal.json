@@ -15,6 +15,13 @@
       "when": 1785598392694,
       "tag": "0001_parched_sharon_ventura",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793079836240,
+      "tag": "0002_colorful_red_hulk",
+      "breakpoints": true
     }
   ]
 }

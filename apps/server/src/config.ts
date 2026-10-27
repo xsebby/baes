@@ -25,6 +25,9 @@ const envSchema = z.object({
   MEDIA_URL_TTL_SECONDS: z.coerce.number().default(3600),
   // Rescan when files under a library root change (inotify). Set false on
   // hosts where watching is unreliable, e.g. network mounts.
+  // baes-fingerprint's `fp` binary. Set to enable duplicate-recording
+  // detection after scans; empty disables it.
+  FP_BIN: z.string().default(''),
   WATCH_LIBRARY: z
     .enum(['true', 'false'])
     .default('true')

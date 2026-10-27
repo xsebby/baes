@@ -63,6 +63,9 @@ export class LibraryScanner {
 
   private force = false;
 
+  /** Called after every scan, successful or not (e.g. to look for duplicates). */
+  onFinished: (() => void) | null = null;
+
   /** Fire-and-forget; returns immediately if a scan is already running. */
   start(force = false): boolean {
     if (this.status.running) return false;
@@ -85,6 +88,7 @@ export class LibraryScanner {
       .finally(() => {
         this.status.running = false;
         this.status.finishedAt = new Date().toISOString();
+        this.onFinished?.();
       });
     return true;
   }

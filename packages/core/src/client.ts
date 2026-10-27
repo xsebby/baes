@@ -14,6 +14,8 @@ import type {
   PlaylistDetail,
   PlaylistSummary,
   RecentPlay,
+  DuplicateGroup,
+  DuplicateStatus,
   RedeemInviteRequest,
   ImportJob,
   ImportPreviewResponse,
@@ -143,6 +145,19 @@ export class ApiClient {
 
   reportPlays(events: PlayEventInput[]): Promise<void> {
     return this.request('POST', '/api/plays', { events });
+  }
+
+  listDuplicates(): Promise<{ status: DuplicateStatus; groups: DuplicateGroup[] }> {
+    return this.request('GET', '/api/admin/duplicates');
+  }
+
+  /** Marks every pair among these tracks as "not duplicates". */
+  dismissDuplicates(trackIds: string[]): Promise<void> {
+    return this.request('POST', '/api/admin/duplicates/dismiss', { trackIds });
+  }
+
+  findDuplicates(): Promise<DuplicateStatus> {
+    return this.request('POST', '/api/admin/duplicates/scan');
   }
 
   recentPlays(limit = 30): Promise<{ plays: RecentPlay[] }> {

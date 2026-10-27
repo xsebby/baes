@@ -41,6 +41,7 @@ export default function RootLayout() {
               <Stack.Screen name="liked" options={{ title: '' }} />
               <Stack.Screen name="downloads" options={{ title: '' }} />
               <Stack.Screen name="recent" options={{ title: '' }} />
+              <Stack.Screen name="duplicates" options={{ title: '' }} />
             </Stack>
           </PlayerProvider>
         </DownloadsProvider>

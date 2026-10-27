@@ -132,6 +132,25 @@ export interface PlayEventInput {
   deviceId?: string;
 }
 
+export interface DuplicateTrack extends Track {
+  fileName: string;
+  bitrate: number | null;
+}
+
+export interface DuplicateGroup {
+  /** Votes of the strongest match in the group; higher = more certain. */
+  strongest: number;
+  tracks: DuplicateTrack[];
+}
+
+export interface DuplicateStatus {
+  enabled: boolean;
+  running: boolean;
+  lastRunAt: string | null;
+  lastError: string | null;
+  fingerprinted: number;
+}
+
 export interface RecentPlay {
   track: Track;
   playedAt: string;

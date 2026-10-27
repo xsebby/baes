@@ -8,6 +8,7 @@ import {
   pgEnum,
   pgSequence,
   pgTable,
+  primaryKey,
   real,
   text,
   timestamp,
@@ -334,4 +335,38 @@ export const transcodeCache = pgTable(
     lastAccessAt: timestamp('last_access_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('transcode_track_profile_idx').on(t.trackId, t.profile)],
+);
+
+// ---------------------------------------------------------------------------
+// Duplicate recordings (audio fingerprints, via the `fp` tool)
+// ---------------------------------------------------------------------------
+
+/** Which file contents are already in the fingerprint index. */
+export const trackFingerprints = pgTable('track_fingerprints', {
+  trackId: uuid('track_id')
+    .primaryKey()
+    .references(() => tracks.id, { onDelete: 'cascade' }),
+  contentHash: text('content_hash').notNull(),
+  checkedAt: timestamp('checked_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Two tracks whose audio is the same recording (re-upload, re-encode, renamed
+ * copy). Stored once per pair with trackA < trackB. Dismissing keeps the row
+ * so a rescan doesn't resurface it.
+ */
+export const duplicatePairs = pgTable(
+  'duplicate_pairs',
+  {
+    trackA: uuid('track_a')
+      .notNull()
+      .references(() => tracks.id, { onDelete: 'cascade' }),
+    trackB: uuid('track_b')
+      .notNull()
+      .references(() => tracks.id, { onDelete: 'cascade' }),
+    votes: integer('votes').notNull(),
+    detectedAt: timestamp('detected_at', { withTimezone: true }).notNull().defaultNow(),
+    dismissedAt: timestamp('dismissed_at', { withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.trackA, t.trackB] })],
 );

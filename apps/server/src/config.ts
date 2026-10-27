@@ -23,6 +23,12 @@ const envSchema = z.object({
   // Lifetime of signed stream/art URLs. Must comfortably outlast the longest
   // track — AVPlayer keeps range-requesting the same URL for the whole play.
   MEDIA_URL_TTL_SECONDS: z.coerce.number().default(3600),
+  // Rescan when files under a library root change (inotify). Set false on
+  // hosts where watching is unreliable, e.g. network mounts.
+  WATCH_LIBRARY: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
 });
 
 export type Config = z.infer<typeof envSchema>;

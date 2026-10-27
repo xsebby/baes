@@ -6,6 +6,7 @@ import rateLimit from '@fastify/rate-limit';
 import type { Config } from './config.js';
 import { createDb } from './db.js';
 import { LibraryScanner } from './library/scanner.js';
+import { LibraryWatcher } from './library/watcher.js';
 import authPlugin from './plugins/auth.js';
 import { authRoutes } from './routes/auth.js';
 import { ingestRoutes } from './routes/ingest.js';
@@ -37,6 +38,17 @@ export async function buildApp(config: Config) {
   await app.register(authPlugin, { db });
 
   const scanner = new LibraryScanner(db, path.join(config.DATA_DIR, 'art'));
+
+  // Rescan automatically when files land in a library root.
+  if (config.WATCH_LIBRARY && config.NODE_ENV !== 'test') {
+    const watcher = new LibraryWatcher(db, scanner, app.log);
+    app.addHook('onReady', async () => {
+      await watcher.start();
+    });
+    app.addHook('onClose', async () => {
+      watcher.close();
+    });
+  }
 
   app.get('/api/health', async () => ({
     status: 'ok' as const,

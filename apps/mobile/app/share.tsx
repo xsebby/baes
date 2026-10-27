@@ -4,7 +4,6 @@ import {
   Alert,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Switch,
   Text,
@@ -13,6 +12,7 @@ import {
 import { Stack, useLocalSearchParams } from 'expo-router';
 import type { ShareLink } from '@baes/core';
 import { useAuth } from '../src/auth';
+import { shareLink } from '../src/share-link';
 
 const EXPIRY: { label: string; days: number | null }[] = [
   { label: '1 day', days: 1 },
@@ -45,7 +45,7 @@ export default function ShareScreen() {
   }, [load]);
 
   async function send(link: ShareLink) {
-    await Share.share({ url: link.url, message: `${link.title} on bæs: ${link.url}` });
+    await shareLink(link.url);
   }
 
   async function create() {

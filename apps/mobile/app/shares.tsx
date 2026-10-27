@@ -4,13 +4,13 @@ import {
   Alert,
   FlatList,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import type { ShareLink } from '@baes/core';
 import { useAuth } from '../src/auth';
+import { shareLink } from '../src/share-link';
 
 /** Every active share link, for the owner to resend or revoke. */
 export default function SharesScreen() {
@@ -72,7 +72,7 @@ export default function SharesScreen() {
             </Text>
           </View>
           {!l.expired && (
-            <Pressable onPress={() => Share.share({ url: l.url, message: l.url })} hitSlop={8}>
+            <Pressable onPress={() => shareLink(l.url)} hitSlop={8}>
               <Text style={styles.action}>Send</Text>
             </Pressable>
           )}

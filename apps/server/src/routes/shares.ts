@@ -1,8 +1,10 @@
 import { randomBytes } from 'node:crypto';
+import path from 'node:path';
+import archiver from 'archiver';
 import type { FastifyPluginAsync } from 'fastify';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { albums, artists, playlistItems, playlists, shares, tracks } from '@baes/db';
+import { albums, artists, libraryRoots, playlistItems, playlists, shares, tracks } from '@baes/db';
 import type { Database } from '../db.js';
 import type { Config } from '../config.js';
 import { mediaPath } from '../library/signing.js';
@@ -99,16 +101,85 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
 
   // ---- public ----
 
+  /** A live share (not revoked, not expired), or null. */
+  async function liveShare(token: string) {
+    const [share] = await db.select().from(shares).where(eq(shares.token, token)).limit(1);
+    if (!share || share.revokedAt || (share.expiresAt && share.expiresAt < new Date())) return null;
+    return share;
+  }
+
+  /** Track ids a share covers, in playlist order. */
+  async function sharedTrackIds(share: typeof shares.$inferSelect): Promise<string[]> {
+    if (share.kind === 'track') return [share.targetId];
+    const items = await db
+      .select({ trackId: playlistItems.trackId })
+      .from(playlistItems)
+      .innerJoin(playlists, eq(playlistItems.playlistId, playlists.id))
+      .where(
+        and(
+          eq(playlistItems.playlistId, share.targetId),
+          isNull(playlistItems.deletedAt),
+          isNull(playlists.deletedAt),
+        ),
+      )
+      .orderBy(asc(playlistItems.sortKey));
+    return items.flatMap((i) => (i.trackId ? [i.trackId] : []));
+  }
+
+  /** Every shared file in one zip. Stored, not compressed: audio is already compressed. */
+  app.get(
+    '/api/s/:token/download',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (req, reply) => {
+      const { token } = req.params as { token: string };
+      const share = await liveShare(token);
+      if (!share || !share.allowDownload) return reply.code(404).send(NOT_FOUND);
+      const ids = await sharedTrackIds(share);
+      const files = ids.length
+        ? await db
+            .select({ id: tracks.id, relPath: tracks.relPath, rootPath: libraryRoots.path })
+            .from(tracks)
+            .innerJoin(libraryRoots, eq(tracks.rootId, libraryRoots.id))
+            .where(and(inArray(tracks.id, ids), isNull(tracks.deletedAt)))
+        : [];
+      if (files.length === 0) return reply.code(404).send(NOT_FOUND);
+      const byId = new Map(files.map((f) => [f.id, f]));
+      const title =
+        share.kind === 'playlist'
+          ? ((await targetTitle('playlist', share.targetId, share.createdBy)) ?? 'playlist')
+          : 'song';
+
+      const zip = archiver('zip', { store: true });
+      zip.on('warning', (err) => req.log.warn({ err }, 'share zip warning'));
+      zip.on('error', (err) => req.log.error({ err }, 'share zip failed'));
+      const width = String(ids.length).length;
+      ids.forEach((id, i) => {
+        const f = byId.get(id);
+        if (!f) return;
+        // Numbered so the zip keeps the playlist's order.
+        const name = `${String(i + 1).padStart(width, '0')} ${path.basename(f.relPath)}`;
+        zip.file(path.join(f.rootPath, f.relPath), { name });
+      });
+      void zip.finalize();
+      const safe = title.replace(/[^\p{L}\p{N} ._-]+/gu, '').trim() || 'bæs';
+      return reply
+        .header('Content-Type', 'application/zip')
+        .header(
+          'Content-Disposition',
+          `attachment; filename*=UTF-8''${encodeURIComponent(safe)}.zip`,
+        )
+        .send(zip);
+    },
+  );
+
   app.get(
     '/api/s/:token',
     { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (req, reply) => {
       const { token } = req.params as { token: string };
-      const [share] = await db.select().from(shares).where(eq(shares.token, token)).limit(1);
       // Expired, revoked and never-existed links all look the same.
-      if (!share || share.revokedAt || (share.expiresAt && share.expiresAt < new Date())) {
-        return reply.code(404).send(NOT_FOUND);
-      }
+      const share = await liveShare(token);
+      if (!share) return reply.code(404).send(NOT_FOUND);
 
       // Media URLs never outlive the share itself.
       const ttl = Math.max(
@@ -126,7 +197,6 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
 
       let title: string | null;
       let artUrl: string | null = null;
-      let trackIds: string[];
       if (share.kind === 'playlist') {
         const [p] = await db
           .select({ title: playlists.title, artPath: playlists.artPath })
@@ -136,17 +206,11 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
         if (!p) return reply.code(404).send(NOT_FOUND);
         title = p.title;
         if (p.artPath) artUrl = signed('art', share.targetId);
-        // Only local tracks: Spotify-only entries have nothing to stream.
-        const items = await db
-          .select({ trackId: playlistItems.trackId })
-          .from(playlistItems)
-          .where(and(eq(playlistItems.playlistId, share.targetId), isNull(playlistItems.deletedAt)))
-          .orderBy(asc(playlistItems.sortKey));
-        trackIds = items.flatMap((i) => (i.trackId ? [i.trackId] : []));
       } else {
         title = null;
-        trackIds = [share.targetId];
       }
+      // Only local tracks: Spotify-only playlist entries have nothing to stream.
+      const trackIds = await sharedTrackIds(share);
 
       const rows = trackIds.length
         ? await db
@@ -197,6 +261,7 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
         title: title ?? items[0]?.title ?? '',
         artUrl: artUrl ?? items[0]?.artUrl ?? null,
         allowDownload: share.allowDownload,
+        downloadAllUrl: share.allowDownload ? `/api/s/${share.token}/download` : null,
         expiresAt: share.expiresAt?.toISOString() ?? null,
         items,
       };

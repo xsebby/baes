@@ -133,6 +133,50 @@ describe('share links', () => {
     expect(body.items.map((i: any) => i.id)).toEqual([trackIds[2], trackIds[0]]);
   });
 
+  it('downloads a whole playlist as one zip, in playlist order', async () => {
+    const pl = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/playlists',
+        headers: auth(),
+        payload: { title: 'zip me' },
+      })
+    ).json().playlist;
+    for (const id of [trackIds[1], trackIds[0]]) {
+      await app.inject({
+        method: 'POST',
+        url: `/api/playlists/${pl.id}/items`,
+        headers: auth(),
+        payload: { trackId: id },
+      });
+    }
+    const { token } = (await share({ kind: 'playlist', targetId: pl.id })).json();
+    const view = (await open(token)).json();
+    expect(view.downloadAllUrl).toBe(`/api/s/${token}/download`);
+    const zip = await app.inject({ method: 'GET', url: view.downloadAllUrl });
+    expect(zip.statusCode).toBe(200);
+    expect(zip.headers['content-type']).toBe('application/zip');
+    expect(zip.headers['content-disposition']).toBe("attachment; filename*=UTF-8''zip%20me.zip");
+    const bytes = zip.rawPayload;
+    expect(bytes.subarray(0, 2).toString()).toBe('PK');
+    const text = bytes.toString('latin1');
+    // Entries are named "<n> <file name>"; fixture file names end in "<title>.wav".
+    const first = text.search(new RegExp(`1 [^\\0]*${view.items[0].title}\\.wav`));
+    const second = text.search(new RegExp(`2 [^\\0]*${view.items[1].title}\\.wav`));
+    expect(first).toBeGreaterThan(-1);
+    expect(second).toBeGreaterThan(first);
+  });
+
+  it('refuses the zip when downloads are off', async () => {
+    const { token } = (
+      await share({ kind: 'track', targetId: trackIds[0], allowDownload: false })
+    ).json();
+    expect((await open(token)).json().downloadAllUrl).toBeNull();
+    expect((await app.inject({ method: 'GET', url: `/api/s/${token}/download` })).statusCode).toBe(
+      404,
+    );
+  });
+
   it('expired links stop working', async () => {
     const { token } = (
       await share({ kind: 'track', targetId: trackIds[0], expiresInDays: 7 })
@@ -163,9 +207,11 @@ describe('share links', () => {
 
   it('lists the owner’s active links with titles and view counts', async () => {
     const list = (await app.inject({ method: 'GET', url: '/api/shares', headers: auth() })).json();
-    expect(list.shares.length).toBe(4); // the revoked one is gone
+    expect(list.shares.length).toBe(6); // the revoked one is gone
     expect(list.shares.every((s: any) => s.url.startsWith('https://music.example/s/'))).toBe(true);
-    expect(list.shares.find((s: any) => s.kind === 'playlist').title).toBe('for friends');
+    expect(list.shares.some((s: any) => s.kind === 'playlist' && s.title === 'for friends')).toBe(
+      true,
+    );
     expect(list.shares.some((s: any) => s.views >= 1)).toBe(true);
   });
 

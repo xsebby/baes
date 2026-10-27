@@ -192,6 +192,8 @@ export interface SharedView {
   title: string;
   artUrl: string | null;
   allowDownload: boolean;
+  /** Zip of every shared file, when downloads are allowed. */
+  downloadAllUrl: string | null;
   expiresAt: string | null;
   items: SharedItem[];
 }

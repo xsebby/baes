@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Linking } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +26,9 @@ export default function PlaylistScreen() {
   const { download, isDownloaded, queueLength } = useDownloads();
   const [playlist, setPlaylist] = useState<PlaylistDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Edit mode reorders locally; the new order is saved once, on Done.
+  const [editing, setEditing] = useState(false);
+  const [savedOrder, setSavedOrder] = useState<string[]>([]);
 
   const load = useCallback(() => {
     if (!client || !id) return;
@@ -47,18 +58,79 @@ export default function PlaylistScreen() {
   async function removeItem(itemId: string) {
     if (!client || !id) return;
     await client.removeFromPlaylist(id, itemId);
+    setSavedOrder((order) => order.filter((i) => i !== itemId));
     load();
+  }
+
+  function move(index: number, delta: -1 | 1) {
+    setPlaylist((p) => {
+      if (!p) return p;
+      const to = index + delta;
+      if (to < 0 || to >= p.items.length) return p;
+      const items = [...p.items];
+      [items[index], items[to]] = [items[to]!, items[index]!];
+      return { ...p, items };
+    });
+  }
+
+  function startEditing() {
+    setSavedOrder(playlist!.items.map((i) => i.itemId));
+    setEditing(true);
+  }
+
+  async function finishEditing() {
+    setEditing(false);
+    const order = playlist!.items.map((i) => i.itemId);
+    if (!client || !id || order.join() === savedOrder.join()) return;
+    try {
+      await client.reorderPlaylist(id, order);
+    } catch (e) {
+      Alert.alert("Couldn't save the new order", e instanceof Error ? e.message : undefined);
+    }
+    load();
+  }
+
+  function rename() {
+    Alert.prompt?.(
+      'Rename playlist',
+      undefined,
+      async (title) => {
+        if (!client || !id || !title?.trim() || title.trim() === playlist!.title) return;
+        try {
+          await client.renamePlaylist(id, title.trim());
+        } catch (e) {
+          Alert.alert("Couldn't rename", e instanceof Error ? e.message : undefined);
+        }
+        load();
+      },
+      'plain-text',
+      playlist!.title,
+    );
   }
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: playlist.title }} />
+      <Stack.Screen
+        options={{
+          title: playlist.title,
+          headerRight: isMirror
+            ? undefined
+            : () => (
+                <Pressable onPress={editing ? finishEditing : startEditing} hitSlop={10}>
+                  <Text style={styles.editButton}>{editing ? 'Done' : 'Edit'}</Text>
+                </Pressable>
+              ),
+        }}
+      />
       <FlatList
         data={playlist.items}
         keyExtractor={(i) => i.itemId}
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={styles.title}>{playlist.title}</Text>
+            <Pressable onPress={editing ? rename : undefined} style={styles.titleRow}>
+              <Text style={styles.title}>{playlist.title}</Text>
+              {editing && <Ionicons name="pencil" size={18} color="#8ab4ff" />}
+            </Pressable>
             <Text style={styles.meta}>{playlist.items.length} tracks</Text>
             {queue.length > 0 && (
               <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -87,13 +159,33 @@ export default function PlaylistScreen() {
         ListEmptyComponent={
           <Text style={styles.emptyText}>Long-press any track in your library to add it here.</Text>
         }
-        renderItem={({ item }) =>
+        renderItem={({ item, index }) =>
           item.track ? (
             <TrackRow
               track={item.track}
               queue={queue}
               trailing={
-                isMirror ? undefined : (
+                isMirror ? undefined : editing ? (
+                  <View style={styles.editControls}>
+                    <Pressable onPress={() => move(index, -1)} hitSlop={6} disabled={index === 0}>
+                      <Ionicons name="chevron-up" size={22} color={index === 0 ? '#333' : '#ccc'} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => move(index, 1)}
+                      hitSlop={6}
+                      disabled={index === playlist.items.length - 1}
+                    >
+                      <Ionicons
+                        name="chevron-down"
+                        size={22}
+                        color={index === playlist.items.length - 1 ? '#333' : '#ccc'}
+                      />
+                    </Pressable>
+                    <Pressable onPress={() => removeItem(item.itemId)} hitSlop={6}>
+                      <Ionicons name="close-circle-outline" size={20} color="#ff6b8a" />
+                    </Pressable>
+                  </View>
+                ) : (
                   <Pressable onPress={() => removeItem(item.itemId)} hitSlop={10}>
                     <Ionicons name="close-circle-outline" size={20} color="#666" />
                   </Pressable>
@@ -132,6 +224,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0b0b0f' },
   header: { padding: 20, gap: 6 },
   title: { color: '#fff', fontSize: 26, fontWeight: '800' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  editButton: { color: '#8ab4ff', fontSize: 16, fontWeight: '600' },
+  editControls: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   meta: { color: '#888', fontSize: 13 },
   playAll: {
     flexDirection: 'row',

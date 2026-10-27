@@ -25,7 +25,14 @@ export default function RootLayout() {
               <Stack.Screen name="admin" options={{ title: 'Admin' }} />
               <Stack.Screen
                 name="player"
-                options={{ title: '', presentation: 'modal', headerShown: true }}
+                options={{
+                  title: '',
+                  presentation: 'modal',
+                  headerShown: true,
+                  // Let the color-reactive background run under the header.
+                  headerTransparent: true,
+                  headerStyle: { backgroundColor: 'transparent' },
+                }}
               />
               <Stack.Screen
                 name="add-to-playlist"
@@ -33,6 +40,7 @@ export default function RootLayout() {
               />
               <Stack.Screen name="liked" options={{ title: '' }} />
               <Stack.Screen name="downloads" options={{ title: '' }} />
+              <Stack.Screen name="recent" options={{ title: '' }} />
             </Stack>
           </PlayerProvider>
         </DownloadsProvider>

@@ -17,7 +17,8 @@ import TrackPlayer, {
   useProgress,
   useTrackPlayerEvents,
 } from 'react-native-track-player';
-import type { Track } from '@baes/core';
+import { Platform } from 'react-native';
+import type { PlayEventInput, Track } from '@baes/core';
 import { useAuth } from './auth';
 import { useDownloads } from './downloads';
 
@@ -120,6 +121,39 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useTrackPlayerEvents([Event.PlaybackActiveTrackChanged], () => {
     void TrackPlayer.setRate(rateRef.current);
   });
+
+  // Report a play once a track has really been listened to: 30s, or half of
+  // anything shorter. Sent immediately so a later pause or kill can't lose
+  // it; failed sends (offline) ride along with the next one.
+  const playRef = useRef<{ trackId: string; startedAt: number; reported: boolean } | null>(null);
+  const unsentPlays = useRef<PlayEventInput[]>([]);
+  const activeId = activeTrack?.id as string | undefined;
+  useEffect(() => {
+    playRef.current = activeId
+      ? { trackId: activeId, startedAt: Date.now(), reported: false }
+      : null;
+  }, [activeId]);
+  useEffect(() => {
+    const play = playRef.current;
+    if (!client || !play || play.reported) return;
+    const threshold = progress.duration > 0 ? Math.min(30, progress.duration / 2) : 30;
+    // Right after a track change, progress can still be the previous track's.
+    if (progress.position < threshold || Date.now() - play.startedAt < 5000) return;
+    play.reported = true;
+    const events: PlayEventInput[] = [
+      ...unsentPlays.current,
+      {
+        trackId: play.trackId,
+        playedMs: Math.round(progress.position * 1000),
+        startedAt: new Date(play.startedAt).toISOString(),
+        deviceId: Platform.OS,
+      },
+    ];
+    unsentPlays.current = [];
+    client.reportPlays(events).catch(() => {
+      unsentPlays.current = [...events, ...unsentPlays.current].slice(-200);
+    });
+  }, [client, progress.position, progress.duration]);
 
   const toRNTrack = useCallback(
     async (t: Track, resolveUrl: boolean) => {

@@ -13,6 +13,8 @@ interface RouteOpts {
 
 const createPlaylistSchema = z.object({ title: z.string().min(1).max(120) });
 const addItemSchema = z.object({ trackId: z.string().uuid() });
+const renameSchema = z.object({ title: z.string().trim().min(1).max(120) });
+const reorderSchema = z.object({ itemIds: z.array(z.string().uuid()).min(1).max(5000) });
 
 const bumpSeq = sql`nextval('change_seq')`;
 
@@ -196,6 +198,80 @@ export const playlistRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, c
         : null,
       items,
     };
+  });
+
+  /** The caller's live playlist, or null. */
+  async function ownedPlaylist(id: string, userId: string) {
+    const [playlist] = await db
+      .select({ id: playlists.id, source: playlists.source })
+      .from(playlists)
+      .where(and(eq(playlists.id, id), eq(playlists.ownerId, userId), isNull(playlists.deletedAt)))
+      .limit(1);
+    return playlist ?? null;
+  }
+
+  // Spotify mirrors are rewritten by every sync, so edits to them wouldn't stick.
+  const mirrorReadOnly = {
+    error: 'read_only',
+    message: 'Spotify playlists are mirrored; edit them in Spotify',
+  };
+
+  app.patch('/api/playlists/:id', { preHandler: app.requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = renameSchema.safeParse(req.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: 'invalid_request', message: body.error.message });
+    }
+    const playlist = await ownedPlaylist(id, req.authUser!.id);
+    if (!playlist) {
+      return reply.code(404).send({ error: 'not_found', message: 'Playlist not found' });
+    }
+    if (playlist.source !== 'local') return reply.code(409).send(mirrorReadOnly);
+    await db
+      .update(playlists)
+      .set({ title: body.data.title, updatedSeq: bumpSeq })
+      .where(eq(playlists.id, id));
+    return reply.code(204).send();
+  });
+
+  /** Replace the order: `itemIds` must be exactly the playlist's live items. */
+  app.put('/api/playlists/:id/order', { preHandler: app.requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = reorderSchema.safeParse(req.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: 'invalid_request', message: body.error.message });
+    }
+    const playlist = await ownedPlaylist(id, req.authUser!.id);
+    if (!playlist) {
+      return reply.code(404).send({ error: 'not_found', message: 'Playlist not found' });
+    }
+    if (playlist.source !== 'local') return reply.code(409).send(mirrorReadOnly);
+
+    const live = await db
+      .select({ id: playlistItems.id })
+      .from(playlistItems)
+      .where(and(eq(playlistItems.playlistId, id), isNull(playlistItems.deletedAt)));
+    const liveIds = new Set(live.map((i) => i.id));
+    const wanted = body.data.itemIds;
+    if (
+      new Set(wanted).size !== wanted.length ||
+      wanted.length !== liveIds.size ||
+      wanted.some((i) => !liveIds.has(i))
+    ) {
+      // Most likely the client's copy is stale (an item was added or removed).
+      return reply
+        .code(409)
+        .send({ error: 'stale_order', message: 'Playlist changed; reload and try again' });
+    }
+    await db.transaction(async (tx) => {
+      for (const [i, itemId] of wanted.entries()) {
+        await tx
+          .update(playlistItems)
+          .set({ sortKey: nextSortKey(String(i)), updatedSeq: bumpSeq })
+          .where(eq(playlistItems.id, itemId));
+      }
+    });
+    return reply.code(204).send();
   });
 
   app.delete('/api/playlists/:id', { preHandler: app.requireAuth }, async (req, reply) => {

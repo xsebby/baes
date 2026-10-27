@@ -172,3 +172,126 @@ describe('likes', () => {
     expect(liked.json().tracks).toHaveLength(1);
   });
 });
+
+describe('playlist editing', () => {
+  let playlistId: string;
+  let itemIds: string[];
+
+  it('renames a playlist', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/playlists',
+      headers: auth(),
+      payload: { title: 'old name' },
+    });
+    playlistId = created.json().playlist.id;
+    for (const trackId of trackIds) {
+      await app.inject({
+        method: 'POST',
+        url: `/api/playlists/${playlistId}/items`,
+        headers: auth(),
+        payload: { trackId },
+      });
+    }
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/playlists/${playlistId}`,
+      headers: auth(),
+      payload: { title: '  new name ' },
+    });
+    expect(res.statusCode).toBe(204);
+    const got = await app.inject({
+      method: 'GET',
+      url: `/api/playlists/${playlistId}`,
+      headers: auth(),
+    });
+    expect(got.json().title).toBe('new name');
+    itemIds = got.json().items.map((i: any) => i.itemId);
+    expect(itemIds.length).toBe(trackIds.length);
+  });
+
+  it('rejects an empty title', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/playlists/${playlistId}`,
+      headers: auth(),
+      payload: { title: '   ' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('reorders items', async () => {
+    const reversed = [...itemIds].reverse();
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/playlists/${playlistId}/order`,
+      headers: auth(),
+      payload: { itemIds: reversed },
+    });
+    expect(res.statusCode).toBe(204);
+    const got = await app.inject({
+      method: 'GET',
+      url: `/api/playlists/${playlistId}`,
+      headers: auth(),
+    });
+    expect(got.json().items.map((i: any) => i.itemId)).toEqual(reversed);
+  });
+
+  it('rejects a stale order', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/playlists/${playlistId}/order`,
+      headers: auth(),
+      payload: { itemIds: itemIds.slice(1) },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('stale_order');
+  });
+
+  it('404s for a missing playlist', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/playlists/00000000-0000-4000-8000-000000000000',
+      headers: auth(),
+      payload: { title: 'x' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('recently played', () => {
+  it('returns distinct tracks, most recent play first', async () => {
+    const [a, b] = trackIds;
+    const at = (min: number) => new Date(Date.UTC(2026, 9, 1, 12, min)).toISOString();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/plays',
+      headers: auth(),
+      payload: {
+        events: [
+          { trackId: a, playedMs: 40_000, startedAt: at(0) },
+          { trackId: b, playedMs: 40_000, startedAt: at(5) },
+          { trackId: a, playedMs: 40_000, startedAt: at(10) },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(204);
+
+    const recent = await app.inject({ method: 'GET', url: '/api/plays/recent', headers: auth() });
+    expect(recent.statusCode).toBe(200);
+    const plays = recent.json().plays;
+    expect(plays.map((p: any) => p.track.id)).toEqual([a, b]);
+    expect(plays[0].playedAt).toBe(at(10));
+    expect(plays[0].track.streamUrl).toContain('/api/stream/');
+  });
+
+  it('honours limit', async () => {
+    const recent = await app.inject({
+      method: 'GET',
+      url: '/api/plays/recent?limit=1',
+      headers: auth(),
+    });
+    expect(recent.json().plays.length).toBe(1);
+  });
+});

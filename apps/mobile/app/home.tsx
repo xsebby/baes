@@ -202,6 +202,15 @@ export default function Library() {
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#444" />
               </Pressable>
+              <Pressable style={styles.artistRow} onPress={() => router.push('/recent')}>
+                <View style={styles.artistBubble}>
+                  <Ionicons name="time" size={20} color="#8ab4ff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.artistName}>Recently played</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#444" />
+              </Pressable>
               <Pressable style={styles.artistRow} onPress={() => router.push('/downloads')}>
                 <View style={styles.artistBubble}>
                   <Ionicons name="arrow-down-circle" size={20} color="#7dd87d" />

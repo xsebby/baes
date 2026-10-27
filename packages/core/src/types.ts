@@ -132,6 +132,11 @@ export interface PlayEventInput {
   deviceId?: string;
 }
 
+export interface RecentPlay {
+  track: Track;
+  playedAt: string;
+}
+
 export interface PlaylistSummary {
   id: string;
   title: string;

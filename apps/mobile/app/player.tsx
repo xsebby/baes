@@ -106,7 +106,9 @@ export default function NowPlaying() {
   const drift = pulse.interpolate({ inputRange: [0, 1], outputRange: [0, -30] });
 
   return (
-    <View style={[styles.container, { paddingBottom: 24 + insets.bottom }]}>
+    <View
+      style={[styles.container, { paddingTop: 24 + insets.top, paddingBottom: 24 + insets.bottom }]}
+    >
       <LinearGradient
         colors={[colors[0] ?? '#1b1730', '#0b0b0f']}
         style={StyleSheet.absoluteFill}
@@ -145,6 +147,8 @@ export default function NowPlaying() {
       )}
 
       <View style={styles.metaRow}>
+        {/* Mirrors the heart so the title centers on the screen, not beside it. */}
+        <View style={styles.likeSlot} />
         <View style={styles.meta}>
           <Text style={styles.title} numberOfLines={2}>
             {current.title}
@@ -155,7 +159,7 @@ export default function NowPlaying() {
           </Text>
           {current.needsReview && <Text style={styles.badge}>untagged — metadata inferred</Text>}
         </View>
-        <Pressable onPress={toggleLike} hitSlop={10}>
+        <Pressable onPress={toggleLike} hitSlop={10} style={styles.likeSlot}>
           <Ionicons
             name={liked ? 'heart' : 'heart-outline'}
             size={28}
@@ -364,9 +368,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     width: '100%',
   },
+  likeSlot: { width: 28, alignItems: 'center' },
   meta: { flex: 1, alignItems: 'center', gap: 6 },
   title: { color: '#fff', fontSize: 22, fontWeight: '800', textAlign: 'center' },
-  artist: { color: '#999', fontSize: 15 },
+  artist: { color: '#999', fontSize: 15, textAlign: 'center' },
   badge: { color: '#ff9f6b', fontSize: 12, marginTop: 4 },
   scrubWrap: { width: '100%' },
   slider: { width: '100%', height: 36 },

@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { and, asc, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import {
   albumTracklistItems,
   albumTracklists,
@@ -282,6 +282,35 @@ export const libraryRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, co
       })),
     );
     return reply.code(204).send();
+  });
+
+  /** Distinct tracks the caller played, most recent first. */
+  app.get('/api/plays/recent', { preHandler: app.requireAuth }, async (req) => {
+    const limit = Math.min(Math.max(Number((req.query as { limit?: string }).limit) || 30, 1), 100);
+    const latest = db
+      .selectDistinctOn([playEvents.trackId], {
+        trackId: playEvents.trackId,
+        playedAt: playEvents.startedAt,
+      })
+      .from(playEvents)
+      .where(and(eq(playEvents.userId, req.authUser!.id), isNotNull(playEvents.trackId)))
+      .orderBy(playEvents.trackId, desc(playEvents.startedAt))
+      .as('latest');
+    const rows = await db
+      .select({ track: trackSelection, playedAt: latest.playedAt })
+      .from(latest)
+      .innerJoin(tracks, eq(tracks.id, latest.trackId))
+      .leftJoin(artists, eq(tracks.artistId, artists.id))
+      .leftJoin(albums, eq(tracks.albumId, albums.id))
+      .where(isNull(tracks.deletedAt))
+      .orderBy(desc(latest.playedAt))
+      .limit(limit);
+    return {
+      plays: rows.map((r) => ({
+        track: withMediaUrls(r.track),
+        playedAt: r.playedAt.toISOString(),
+      })),
+    };
   });
 
   // Fresh signed URL for a single track — used when a cached one expires mid-session.

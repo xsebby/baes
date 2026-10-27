@@ -13,6 +13,7 @@ import type {
   PlayEventInput,
   PlaylistDetail,
   PlaylistSummary,
+  RecentPlay,
   RedeemInviteRequest,
   ImportJob,
   ImportPreviewResponse,
@@ -144,6 +145,10 @@ export class ApiClient {
     return this.request('POST', '/api/plays', { events });
   }
 
+  recentPlays(limit = 30): Promise<{ plays: RecentPlay[] }> {
+    return this.request('GET', `/api/plays/recent?limit=${limit}`);
+  }
+
   /** Resolve a signed relative media path against the server base URL. */
   mediaUrl(relative: string): string {
     return `${this.baseUrl}${relative}`;
@@ -173,6 +178,15 @@ export class ApiClient {
 
   removeFromPlaylist(playlistId: string, itemId: string): Promise<void> {
     return this.request('DELETE', `/api/playlists/${playlistId}/items/${itemId}`);
+  }
+
+  renamePlaylist(id: string, title: string): Promise<void> {
+    return this.request('PATCH', `/api/playlists/${id}`, { title });
+  }
+
+  /** `itemIds` must be every live item in the playlist, in the new order. */
+  reorderPlaylist(id: string, itemIds: string[]): Promise<void> {
+    return this.request('PUT', `/api/playlists/${id}/order`, { itemIds });
   }
 
   // ---- Spotify ----

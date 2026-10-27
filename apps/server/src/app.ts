@@ -43,10 +43,16 @@ export async function buildApp(config: Config) {
 
   const duplicates = new DuplicateFinder(
     db,
-    config.FP_BIN,
+    // A configured path that doesn't exist (e.g. an image built without fp)
+    // disables detection instead of failing every scan.
+    config.FP_BIN && existsSync(config.FP_BIN) ? config.FP_BIN : '',
     path.join(config.DATA_DIR, 'fingerprints.fpdb'),
     app.log,
+    config.FP_JOBS,
   );
+  if (config.FP_BIN && !duplicates.enabled) {
+    app.log.warn({ fpBin: config.FP_BIN }, 'FP_BIN not found; duplicate detection is off');
+  }
   scanner.onFinished = () => duplicates.start();
 
   // Rescan automatically when files land in a library root.

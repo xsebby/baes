@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { setPriority } from 'node:os';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -7,7 +8,18 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { duplicatePairs, libraryRoots, trackFingerprints, tracks } from '@baes/db';
 import type { Database } from '../db.js';
 
-const run = promisify(execFile);
+const execFileAsync = promisify(execFile);
+
+/** Runs fp at low CPU priority: on a one-core server, streaming comes first. */
+function run(bin: string, args: string[], opts: { maxBuffer: number }) {
+  const p = execFileAsync(bin, args, opts);
+  try {
+    if (p.child.pid) setPriority(p.child.pid, 10);
+  } catch {
+    // Not permitted or already exited: run at normal priority.
+  }
+  return p;
+}
 
 interface Logger {
   info(obj: object, msg: string): void;
@@ -64,6 +76,7 @@ export class DuplicateFinder {
     private readonly fpBin: string,
     private readonly indexPath: string,
     private readonly log: Logger,
+    private readonly jobs = 1,
   ) {}
 
   get enabled(): boolean {
@@ -139,7 +152,9 @@ export class DuplicateFinder {
 
     for (let i = 0; i < pending.length; i += INDEX_BATCH) {
       const files = pending.slice(i, i + INDEX_BATCH).map((t) => path.join(t.rootPath, t.relPath));
-      await run(this.fpBin, ['index', this.indexPath, ...files], { maxBuffer: 16 << 20 });
+      await run(this.fpBin, ['index', this.indexPath, ...files, '--jobs', String(this.jobs)], {
+        maxBuffer: 16 << 20,
+      });
     }
 
     let pairs = 0;

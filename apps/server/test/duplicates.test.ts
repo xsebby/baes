@@ -15,8 +15,10 @@ const fs = require('fs');
 const path = require('path');
 const [cmd, db, ...rest] = process.argv.slice(2);
 if (cmd === 'index') {
-  fs.appendFileSync(db, rest.map((f) => f + '\\n').join(''));
-  fs.appendFileSync(db + '.calls', 'index ' + rest.length + '\\n');
+  const jobs = rest.indexOf('--jobs');
+  const files = jobs >= 0 ? rest.filter((_, i) => i !== jobs && i !== jobs + 1) : rest;
+  fs.appendFileSync(db, files.map((f) => f + '\\n').join(''));
+  fs.appendFileSync(db + '.calls', 'index ' + files.length + ' jobs=' + rest[jobs + 1] + '\\n');
   process.exit(0);
 }
 const file = rest[0];
@@ -110,7 +112,7 @@ describe('duplicate recordings', () => {
     const calls = await import('node:fs').then((fs) =>
       fs.readFileSync(path.join(dataDir, 'fingerprints.fpdb.calls'), 'utf8').trim().split('\n'),
     );
-    expect(calls).toEqual(['index 3']);
+    expect(calls).toEqual(['index 3 jobs=1']);
   });
 
   it('dismissing a group keeps it hidden across rescans', async () => {

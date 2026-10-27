@@ -28,6 +28,9 @@ const envSchema = z.object({
   // baes-fingerprint's `fp` binary. Set to enable duplicate-recording
   // detection after scans; empty disables it.
   FP_BIN: z.string().default(''),
+  // Parallel decodes while indexing. 1 suits a small server: indexing is a
+  // background job and shouldn't compete with streaming for the CPU.
+  FP_JOBS: z.coerce.number().int().min(1).default(1),
   WATCH_LIBRARY: z
     .enum(['true', 'false'])
     .default('true')

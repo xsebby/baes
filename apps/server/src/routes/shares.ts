@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import archiver from 'archiver';
 import type { FastifyPluginAsync } from 'fastify';
@@ -7,7 +8,8 @@ import { z } from 'zod';
 import { albums, artists, libraryRoots, playlistItems, playlists, shares, tracks } from '@baes/db';
 import type { Database } from '../db.js';
 import type { Config } from '../config.js';
-import { mediaPath } from '../library/signing.js';
+import { coverColor } from '../library/art-colors.js';
+import { serveArt, serveTrack } from './stream.js';
 
 interface RouteOpts {
   db: Database;
@@ -23,6 +25,18 @@ const createSchema = z.object({
 });
 
 const NOT_FOUND = { error: 'not_found', message: 'This link is invalid or has expired' };
+
+/** Used when the web build isn't there (tests, API-only deploys). */
+const BARE_HTML =
+  '<!doctype html><html><head><!-- meta --><title>bæs</title><!-- /meta --></head><body></body></html>';
+
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function minutes(ms: number) {
+  const m = Math.round(ms / 60_000);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} hr ${m % 60} min`;
+}
 
 /**
  * Unlisted share links. The owner creates a link for a playlist or a track;
@@ -126,6 +140,181 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
     return items.flatMap((i) => (i.trackId ? [i.trackId] : []));
   }
 
+  /**
+   * Media for a share goes through the share itself, not a signed URL: every
+   * request re-checks that the share is live, so revoking or expiring it ends
+   * playback at once, and the URLs never go stale while it is live.
+   */
+  app.get('/api/s/:token/stream/:trackId', async (req, reply) => {
+    const { token, trackId } = req.params as { token: string; trackId: string };
+    const { download } = req.query as { download?: string };
+    const share = await liveShare(token);
+    if (!share || (download === '1' && !share.allowDownload)) {
+      return reply.code(404).send(NOT_FOUND);
+    }
+    if (!(await sharedTrackIds(share)).includes(trackId)) return reply.code(404).send(NOT_FOUND);
+    return serveTrack(db, req, reply, trackId, { download: download === '1' });
+  });
+
+  /** The playlist's cover, or the album cover of a shared track. */
+  app.get('/api/s/:token/art/:id', async (req, reply) => {
+    const { token, id } = req.params as { token: string; id: string };
+    const share = await liveShare(token);
+    if (!share) return reply.code(404).send(NOT_FOUND);
+    let allowed = share.kind === 'playlist' && share.targetId === id;
+    if (!allowed) {
+      const ids = await sharedTrackIds(share);
+      if (ids.length) {
+        const [hit] = await db
+          .select({ id: tracks.id })
+          .from(tracks)
+          .where(and(inArray(tracks.id, ids), eq(tracks.albumId, id), isNull(tracks.deletedAt)))
+          .limit(1);
+        allowed = !!hit;
+      }
+    }
+    if (!allowed) return reply.code(404).send(NOT_FOUND);
+    return serveArt(db, reply, id);
+  });
+
+  // ---- link previews (Discord, iMessage, Slack…) ----
+
+  let indexHtml: string | null = null;
+  const colorByArt = new Map<string, string | null>();
+
+  async function artColor(artId: string) {
+    if (colorByArt.has(artId)) return colorByArt.get(artId)!;
+    const [a] = await db
+      .select({ artPath: albums.artPath })
+      .from(albums)
+      .where(eq(albums.id, artId))
+      .limit(1);
+    const [p] = a?.artPath
+      ? []
+      : await db
+          .select({ artPath: playlists.artPath })
+          .from(playlists)
+          .where(eq(playlists.id, artId))
+          .limit(1);
+    const artPath = a?.artPath ?? p?.artPath;
+    const color = artPath ? await coverColor(artPath).catch(() => null) : null;
+    if (colorByArt.size > 500) colorByArt.delete(colorByArt.keys().next().value!);
+    colorByArt.set(artId, color);
+    return color;
+  }
+
+  /**
+   * The web app's index.html with Open Graph tags for the shared song or
+   * playlist, so pasted links unfurl like Spotify's: title, "Song · Artist",
+   * cover thumbnail, and an embed color taken from the cover. Crawlers don't
+   * run JS, so this has to happen on the server. Doesn't count as a view.
+   */
+  app.get(
+    '/s/:token',
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    async (req, reply) => {
+      const { token } = req.params as { token: string };
+      if (indexHtml === null) {
+        indexHtml = await readFile(
+          path.join(path.resolve(config.WEB_DIST), 'index.html'),
+          'utf8',
+        ).catch(() => BARE_HTML);
+      }
+      const origin = config.PUBLIC_URL ?? `${req.protocol}://${req.host}`;
+      const meta: Record<string, string> = {
+        'og:site_name': 'bæs',
+        'og:url': `${origin}/s/${token}`,
+      };
+      let title = 'bæs';
+      let artId: string | null = null;
+
+      const share = await liveShare(token);
+      const ids = share ? await sharedTrackIds(share) : [];
+      const rows = ids.length
+        ? await db
+            .select({
+              id: tracks.id,
+              title: tracks.title,
+              durationMs: tracks.durationMs,
+              artistName: artists.name,
+              albumId: tracks.albumId,
+              albumTitle: albums.title,
+              albumHasArt: sql<boolean>`${albums.artPath} is not null`,
+            })
+            .from(tracks)
+            .leftJoin(artists, eq(tracks.artistId, artists.id))
+            .leftJoin(albums, eq(tracks.albumId, albums.id))
+            .where(and(inArray(tracks.id, ids), isNull(tracks.deletedAt)))
+        : [];
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      const items = ids.flatMap((id) => byId.get(id) ?? []);
+      const firstArt = items.find((i) => i.albumHasArt && i.albumId)?.albumId ?? null;
+
+      if (share?.kind === 'track' && items[0]) {
+        const t = items[0];
+        title = t.title;
+        meta['og:type'] = 'music.song';
+        meta['og:description'] = ['Song', t.artistName ?? 'Unknown artist', t.albumTitle]
+          .filter(Boolean)
+          .join(' · ');
+        meta['music:duration'] = String(Math.round(t.durationMs / 1000));
+        artId = firstArt;
+      } else if (share?.kind === 'playlist') {
+        const [p] = await db
+          .select({ title: playlists.title, artPath: playlists.artPath })
+          .from(playlists)
+          .where(and(eq(playlists.id, share.targetId), isNull(playlists.deletedAt)))
+          .limit(1);
+        if (p) {
+          title = p.title;
+          const artistNames = [...new Set(items.map((i) => i.artistName).filter(Boolean))];
+          const total = items.reduce((sum, i) => sum + i.durationMs, 0);
+          meta['og:type'] = 'music.playlist';
+          meta['og:description'] = [
+            'Playlist',
+            `${items.length} ${items.length === 1 ? 'song' : 'songs'}`,
+            total > 0 ? minutes(total) : null,
+            artistNames.length
+              ? artistNames.slice(0, 3).join(', ') + (artistNames.length > 3 ? ' and more' : '')
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          artId = p.artPath ? share.targetId : firstArt;
+        }
+      }
+      if (!meta['og:description']) meta['og:description'] = 'This link is invalid or has expired.';
+      meta['og:title'] = title;
+      if (share && artId) {
+        meta['og:image'] = `${origin}/api/s/${token}/art/${artId}`;
+        const color = await artColor(artId);
+        if (color) meta['theme-color'] = color;
+      }
+      meta['theme-color'] ??= '#0b0b0f';
+      // Thumbnail beside the text, like Spotify's links.
+      meta['twitter:card'] = 'summary';
+
+      const tags = Object.entries(meta)
+        .map(([k, v]) =>
+          k.startsWith('og:') || k.startsWith('music:')
+            ? `<meta property="${k}" content="${escapeHtml(v)}" />`
+            : `<meta name="${k}" content="${escapeHtml(v)}" />`,
+        )
+        .join('\n    ');
+      const head = `<title>${escapeHtml(title === 'bæs' ? title : `${title} · bæs`)}</title>
+    <meta name="description" content="${escapeHtml(meta['og:description'])}" />
+    ${tags}`;
+      const marker = /<!-- meta[\s\S]*?<!-- \/meta -->/;
+      // An index.html without the marker (older build) still gets the tags.
+      const html = marker.test(indexHtml)
+        ? indexHtml.replace(marker, head)
+        : indexHtml
+            .replace(/<title>[\s\S]*?<\/title>/, '')
+            .replace('</head>', `${head}\n  </head>`);
+      return reply.header('Cache-Control', 'no-store').type('text/html; charset=utf-8').send(html);
+    },
+  );
+
   /** Every shared file in one zip. Stored, not compressed: audio is already compressed. */
   app.get(
     '/api/s/:token/download',
@@ -181,19 +370,7 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
       const share = await liveShare(token);
       if (!share) return reply.code(404).send(NOT_FOUND);
 
-      // Media URLs never outlive the share itself.
-      const ttl = Math.max(
-        60,
-        Math.min(
-          config.MEDIA_URL_TTL_SECONDS,
-          share.expiresAt
-            ? Math.floor((share.expiresAt.getTime() - Date.now()) / 1000)
-            : Number.POSITIVE_INFINITY,
-        ),
-      );
-      function signed(kind: 'stream' | 'art', id: string) {
-        return mediaPath(kind, id, config.SERVER_SECRET, ttl).url;
-      }
+      const base = `/api/s/${share.token}`;
 
       let title: string | null;
       let artUrl: string | null = null;
@@ -205,7 +382,7 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
           .limit(1);
         if (!p) return reply.code(404).send(NOT_FOUND);
         title = p.title;
-        if (p.artPath) artUrl = signed('art', share.targetId);
+        if (p.artPath) artUrl = `${base}/art/${share.targetId}`;
       } else {
         title = null;
       }
@@ -235,7 +412,7 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
       const items = trackIds.flatMap((id) => {
         const r = byId.get(id);
         if (!r) return [];
-        const streamUrl = signed('stream', r.id);
+        const streamUrl = `${base}/stream/${r.id}`;
         return [
           {
             id: r.id,
@@ -245,8 +422,8 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
             artistName: r.artistName,
             albumTitle: r.albumTitle,
             streamUrl,
-            artUrl: r.albumId && r.albumHasArt ? signed('art', r.albumId) : null,
-            downloadUrl: share.allowDownload ? `${streamUrl}&download=1` : null,
+            artUrl: r.albumId && r.albumHasArt ? `${base}/art/${r.albumId}` : null,
+            downloadUrl: share.allowDownload ? `${streamUrl}?download=1` : null,
           },
         ];
       });
@@ -261,7 +438,7 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
         title: title ?? items[0]?.title ?? '',
         artUrl: artUrl ?? items[0]?.artUrl ?? null,
         allowDownload: share.allowDownload,
-        downloadAllUrl: share.allowDownload ? `/api/s/${share.token}/download` : null,
+        downloadAllUrl: share.allowDownload ? `${base}/download` : null,
         expiresAt: share.expiresAt?.toISOString() ?? null,
         items,
       };

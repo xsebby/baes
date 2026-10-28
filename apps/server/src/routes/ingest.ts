@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { mkdir, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
@@ -19,6 +18,7 @@ import {
   pillowcasePageUrl,
 } from '../ingest/pillowcase.js';
 import { embedAudioMetadata } from '../ingest/audio-metadata.js';
+import { quadrantColors } from '../library/art-colors.js';
 import {
   artistGridEraOptions,
   trackerhubCsvUrl,
@@ -132,32 +132,7 @@ export const ingestRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
       return reply.code(404).send({ error: 'not_found', message: 'No art' });
     }
     try {
-      const { default: jpeg } = await import('jpeg-js');
-      const img = jpeg.decode(await readFile(artPath), { maxMemoryUsageInMB: 64 });
-      const { width, height, data } = img;
-      const quad = (x0: number, y0: number) => {
-        let r = 0,
-          g = 0,
-          b = 0,
-          n = 0;
-        for (let y = y0; y < y0 + height / 2; y += 8) {
-          for (let x = x0; x < x0 + width / 2; x += 8) {
-            const idx = (Math.floor(y) * width + Math.floor(x)) * 4;
-            r += data[idx]!;
-            g += data[idx + 1]!;
-            b += data[idx + 2]!;
-            n++;
-          }
-        }
-        const boost = (v: number) => Math.min(255, Math.round((v / n) * 1.25));
-        return `rgb(${boost(r)}, ${boost(g)}, ${boost(b)})`;
-      };
-      const colors = [
-        quad(0, 0),
-        quad(width / 2, 0),
-        quad(0, height / 2),
-        quad(width / 2, height / 2),
-      ];
+      const colors = await quadrantColors(artPath);
       colorCache.set(id, colors);
       if (colorCache.size > 500) colorCache.delete(colorCache.keys().next().value!);
       return { colors };

@@ -30,6 +30,7 @@ beforeAll(async () => {
       DATABASE_URL: 'pglite:memory',
       DATA_DIR: dataDir,
       PUBLIC_URL: 'https://music.example',
+      WEB_DIST: path.join(tmpdir(), 'baes-no-web-build'),
     }),
   );
   expect((await app.inject({ method: 'GET', url: '/api/auth/status' })).json()).toEqual({
@@ -104,7 +105,15 @@ describe('share links', () => {
     const body = (await open(token)).json();
     expect(body.allowDownload).toBe(false);
     expect(body.items[0].downloadUrl).toBeNull();
-    expect(body.items[0].streamUrl).toContain('/api/stream/');
+    expect(body.items[0].streamUrl).toBe(`/api/s/${token}/stream/${trackIds[1]}`);
+    expect((await app.inject({ method: 'GET', url: body.items[0].streamUrl })).statusCode).toBe(
+      200,
+    );
+    const forced = await app.inject({
+      method: 'GET',
+      url: `${body.items[0].streamUrl}?download=1`,
+    });
+    expect(forced.statusCode).toBe(404);
   });
 
   it('shares a playlist with its tracks in order', async () => {
@@ -181,11 +190,13 @@ describe('share links', () => {
     const { token } = (
       await share({ kind: 'track', targetId: trackIds[0], expiresInDays: 7 })
     ).json();
-    expect((await open(token)).statusCode).toBe(200);
+    const { streamUrl } = (await open(token)).json().items[0];
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
       vi.setSystemTime(Date.now() + 8 * 86_400_000);
       expect((await open(token)).statusCode).toBe(404);
+      // Media fetched from the page dies with the link, to the second.
+      expect((await app.inject({ method: 'GET', url: streamUrl })).statusCode).toBe(404);
     } finally {
       vi.useRealTimers();
     }
@@ -193,6 +204,8 @@ describe('share links', () => {
 
   it('revoked links stop working and look like any bad link', async () => {
     const created = (await share({ kind: 'track', targetId: trackIds[0] })).json();
+    const { streamUrl } = (await open(created.token)).json().items[0];
+    expect((await app.inject({ method: 'GET', url: streamUrl })).statusCode).toBe(200);
     const del = await app.inject({
       method: 'DELETE',
       url: `/api/shares/${created.id}`,
@@ -203,6 +216,8 @@ describe('share links', () => {
     const bogus = await open('AAAAAAAAAAAAAAAAAAAAAA');
     expect(revoked.statusCode).toBe(404);
     expect(revoked.json()).toEqual(bogus.json());
+    // Someone still on the page loses playback at once, not an hour later.
+    expect((await app.inject({ method: 'GET', url: streamUrl })).statusCode).toBe(404);
   });
 
   it('lists the owner’s active links with titles and view counts', async () => {
@@ -224,6 +239,63 @@ describe('share links', () => {
       targetId: '00000000-0000-4000-8000-000000000000',
     });
     expect(missing.statusCode).toBe(404);
+  });
+
+  it('a link only reaches the tracks and covers it shares', async () => {
+    const { token } = (await share({ kind: 'track', targetId: trackIds[0] })).json();
+    const other = await app.inject({
+      method: 'GET',
+      url: `/api/s/${token}/stream/${trackIds[1]}`,
+    });
+    expect(other.statusCode).toBe(404);
+    const art = await app.inject({ method: 'GET', url: `/api/s/${token}/art/${trackIds[1]}` });
+    expect(art.statusCode).toBe(404);
+  });
+
+  it('link previews: Open Graph tags for songs, playlists and dead links', async () => {
+    const { token } = (await share({ kind: 'track', targetId: trackIds[0] })).json();
+    const views = async () =>
+      (await app.inject({ method: 'GET', url: '/api/shares', headers: auth() }))
+        .json()
+        .shares.find((x: any) => x.token === token).views;
+    const before = await views();
+    const page = await app.inject({ method: 'GET', url: `/s/${token}` });
+    expect(page.statusCode).toBe(200);
+    expect(page.headers['content-type']).toContain('text/html');
+    const song = (await open(token)).json().items[0];
+    expect(page.body).toContain(`<meta property="og:title" content="${song.title}" />`);
+    expect(page.body).toContain(`<title>${song.title} · bæs</title>`);
+    expect(page.body).toMatch(/<meta property="og:description" content="Song · [^"]+" \/>/);
+    expect(page.body).toContain('<meta property="og:type" content="music.song" />');
+    expect(page.body).toContain(`content="https://music.example/s/${token}"`);
+    expect(page.body).toContain('<meta name="twitter:card" content="summary" />');
+    // A crawler fetching the preview isn't a listener.
+    expect(await views()).toBe(before + 1); // +1 from open() above, none from /s/
+
+    const pl = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/playlists',
+        headers: auth(),
+        payload: { title: 'late "nights" <3' },
+      })
+    ).json().playlist;
+    for (const id of [trackIds[0], trackIds[1]]) {
+      await app.inject({
+        method: 'POST',
+        url: `/api/playlists/${pl.id}/items`,
+        headers: auth(),
+        payload: { trackId: id },
+      });
+    }
+    const plToken = (await share({ kind: 'playlist', targetId: pl.id })).json().token;
+    const plPage = (await app.inject({ method: 'GET', url: `/s/${plToken}` })).body;
+    expect(plPage).toContain('content="late &quot;nights&quot; &lt;3"');
+    expect(plPage).toMatch(/og:description" content="Playlist · 2 songs · [^"]*"/);
+
+    const dead = (await app.inject({ method: 'GET', url: '/s/AAAAAAAAAAAAAAAAAAAAAA' })).body;
+    expect(dead).toContain('This link is invalid or has expired.');
+    expect(dead).not.toContain('og:image');
   });
 });
 

@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
 import { mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { and, eq, isNull } from 'drizzle-orm';
 import { albums, libraryRoots, playlists, tracks } from '@baes/db';
 import type { Database } from '../db.js';
@@ -78,6 +78,119 @@ async function ensureCompatFile(
   return out;
 }
 
+/**
+ * Sends a track's bytes (range requests, optional iOS-compat remux, optional
+ * attachment). Callers do the authorization: signed URL or live share.
+ */
+export async function serveTrack(
+  db: Database,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  id: string,
+  opts: { profile?: string; download?: boolean },
+) {
+  const { profile, download } = opts;
+  const [row] = await db
+    .select({
+      relPath: tracks.relPath,
+      rootPath: libraryRoots.path,
+      contentHash: tracks.contentHash,
+      codec: tracks.codec,
+    })
+    .from(tracks)
+    .innerJoin(libraryRoots, eq(tracks.rootId, libraryRoots.id))
+    .where(and(eq(tracks.id, id), isNull(tracks.deletedAt)))
+    .limit(1);
+  if (!row) {
+    return reply.code(404).send({ error: 'not_found', message: 'Track not found' });
+  }
+
+  let filePath = path.join(row.rootPath, row.relPath);
+  let mime = MIME_BY_EXT[path.extname(row.relPath).toLowerCase()] ?? 'application/octet-stream';
+
+  if (profile === 'compat') {
+    try {
+      const compat = await ensureCompatFile(filePath, row.codec, id);
+      if (compat) {
+        filePath = compat;
+        mime = 'audio/mp4';
+      }
+    } catch (err) {
+      req.log.warn({ err }, 'compat transcode failed; serving original');
+    }
+  }
+
+  let fileStat;
+  try {
+    fileStat = await stat(filePath);
+  } catch {
+    return reply.code(404).send({ error: 'not_found', message: 'File missing on disk' });
+  }
+
+  reply.header('Accept-Ranges', 'bytes');
+  reply.header('ETag', `"${row.contentHash}"`);
+  // Same signed URL, saved as a file under its real name (share downloads).
+  // Not a permission: anything streamable can be saved anyway.
+  if (download) {
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(row.relPath))}`,
+    );
+  }
+  reply.header('Cache-Control', 'private, max-age=0');
+
+  const range = req.headers.range;
+  if (range) {
+    const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+    if (!match || (match[1] === '' && match[2] === '')) {
+      return reply.code(416).header('Content-Range', `bytes */${fileStat.size}`).send();
+    }
+    const start = match[1] === '' ? fileStat.size - Number(match[2]) : Number(match[1]);
+    const end =
+      match[1] !== '' && match[2] !== ''
+        ? Math.min(Number(match[2]), fileStat.size - 1)
+        : fileStat.size - 1;
+    if (start < 0 || start > end || start >= fileStat.size) {
+      return reply.code(416).header('Content-Range', `bytes */${fileStat.size}`).send();
+    }
+    return reply
+      .code(206)
+      .header('Content-Range', `bytes ${start}-${end}/${fileStat.size}`)
+      .header('Content-Length', end - start + 1)
+      .type(mime)
+      .send(createReadStream(filePath, { start, end }));
+  }
+
+  return reply
+    .code(200)
+    .header('Content-Length', fileStat.size)
+    .type(mime)
+    .send(createReadStream(filePath));
+}
+
+/** Sends an album or playlist cover by row id. Callers do the authorization. */
+export async function serveArt(db: Database, reply: FastifyReply, id: string) {
+  const [album] = await db
+    .select({ artPath: albums.artPath })
+    .from(albums)
+    .where(eq(albums.id, id))
+    .limit(1);
+  let artPath = album?.artPath ?? null;
+  if (!artPath) {
+    const [pl] = await db
+      .select({ artPath: playlists.artPath })
+      .from(playlists)
+      .where(eq(playlists.id, id))
+      .limit(1);
+    artPath = pl?.artPath ?? null;
+  }
+  if (!artPath) {
+    return reply.code(404).send({ error: 'not_found', message: 'No art' });
+  }
+  reply.header('Cache-Control', 'private, max-age=86400');
+  return reply.type('image/jpeg').send(createReadStream(artPath));
+}
+
 export const streamRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, config }) => {
   app.get('/api/stream/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -90,83 +203,7 @@ export const streamRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
     if (!exp || !sig || !verifyMedia(config.SERVER_SECRET, 'stream', id, Number(exp), sig)) {
       return reply.code(403).send({ error: 'forbidden', message: 'Invalid or expired URL' });
     }
-
-    const [row] = await db
-      .select({
-        relPath: tracks.relPath,
-        rootPath: libraryRoots.path,
-        contentHash: tracks.contentHash,
-        codec: tracks.codec,
-      })
-      .from(tracks)
-      .innerJoin(libraryRoots, eq(tracks.rootId, libraryRoots.id))
-      .where(and(eq(tracks.id, id), isNull(tracks.deletedAt)))
-      .limit(1);
-    if (!row) {
-      return reply.code(404).send({ error: 'not_found', message: 'Track not found' });
-    }
-
-    let filePath = path.join(row.rootPath, row.relPath);
-    let mime = MIME_BY_EXT[path.extname(row.relPath).toLowerCase()] ?? 'application/octet-stream';
-
-    if (profile === 'compat') {
-      try {
-        const compat = await ensureCompatFile(filePath, row.codec, id);
-        if (compat) {
-          filePath = compat;
-          mime = 'audio/mp4';
-        }
-      } catch (err) {
-        req.log.warn({ err }, 'compat transcode failed; serving original');
-      }
-    }
-
-    let fileStat;
-    try {
-      fileStat = await stat(filePath);
-    } catch {
-      return reply.code(404).send({ error: 'not_found', message: 'File missing on disk' });
-    }
-
-    reply.header('Accept-Ranges', 'bytes');
-    reply.header('ETag', `"${row.contentHash}"`);
-    // Same signed URL, saved as a file under its real name (share downloads).
-    // Not a permission: anything streamable can be saved anyway.
-    if (download === '1') {
-      reply.header(
-        'Content-Disposition',
-        `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(row.relPath))}`,
-      );
-    }
-    reply.header('Cache-Control', 'private, max-age=0');
-
-    const range = req.headers.range;
-    if (range) {
-      const match = /^bytes=(\d*)-(\d*)$/.exec(range);
-      if (!match || (match[1] === '' && match[2] === '')) {
-        return reply.code(416).header('Content-Range', `bytes */${fileStat.size}`).send();
-      }
-      const start = match[1] === '' ? fileStat.size - Number(match[2]) : Number(match[1]);
-      const end =
-        match[1] !== '' && match[2] !== ''
-          ? Math.min(Number(match[2]), fileStat.size - 1)
-          : fileStat.size - 1;
-      if (start < 0 || start > end || start >= fileStat.size) {
-        return reply.code(416).header('Content-Range', `bytes */${fileStat.size}`).send();
-      }
-      return reply
-        .code(206)
-        .header('Content-Range', `bytes ${start}-${end}/${fileStat.size}`)
-        .header('Content-Length', end - start + 1)
-        .type(mime)
-        .send(createReadStream(filePath, { start, end }));
-    }
-
-    return reply
-      .code(200)
-      .header('Content-Length', fileStat.size)
-      .type(mime)
-      .send(createReadStream(filePath));
+    return serveTrack(db, req, reply, id, { profile, download: download === '1' });
   });
 
   // Serves album covers and playlist covers by row id.
@@ -176,24 +213,6 @@ export const streamRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
     if (!exp || !sig || !verifyMedia(config.SERVER_SECRET, 'art', id, Number(exp), sig)) {
       return reply.code(403).send({ error: 'forbidden', message: 'Invalid or expired URL' });
     }
-    const [album] = await db
-      .select({ artPath: albums.artPath })
-      .from(albums)
-      .where(eq(albums.id, id))
-      .limit(1);
-    let artPath = album?.artPath ?? null;
-    if (!artPath) {
-      const [pl] = await db
-        .select({ artPath: playlists.artPath })
-        .from(playlists)
-        .where(eq(playlists.id, id))
-        .limit(1);
-      artPath = pl?.artPath ?? null;
-    }
-    if (!artPath) {
-      return reply.code(404).send({ error: 'not_found', message: 'No art' });
-    }
-    reply.header('Cache-Control', 'private, max-age=86400');
-    return reply.type('image/jpeg').send(createReadStream(artPath));
+    return serveArt(db, reply, id);
   });
 };

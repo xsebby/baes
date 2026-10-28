@@ -18,6 +18,7 @@ import type {
 import { formatDuration, useAuth } from './state';
 import { usePlayer } from './player';
 import { EditTrackModal, TrackRow } from './components';
+import { ShareModal } from './menu';
 
 export type View =
   | { type: 'library' }
@@ -775,8 +776,9 @@ export function ArtistView({ id, navigate, onAddToPlaylist }: ViewProps & { id: 
 }
 
 export function PlaylistView({ id, navigate, onAddToPlaylist }: ViewProps & { id: string }) {
-  const { client } = useAuth();
+  const { client, user } = useAuth();
   const [playlist, setPlaylist] = useState<PlaylistDetail | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   const load = useCallback(() => {
     client
@@ -801,6 +803,11 @@ export function PlaylistView({ id, navigate, onAddToPlaylist }: ViewProps & { id
           <div className="sub">{playlist.items.length} tracks</div>
           <div className="actions">
             <PlayAllButton tracks={queue} />
+            {user?.role === 'owner' && !isMirror && (
+              <button className="iconbtn" onClick={() => setSharing(true)}>
+                Share
+              </button>
+            )}
             <label className="iconbtn" style={{ cursor: 'pointer' }}>
               Set cover
               <input
@@ -878,6 +885,12 @@ export function PlaylistView({ id, navigate, onAddToPlaylist }: ViewProps & { id
             </div>
           </a>
         ) : null,
+      )}
+      {sharing && (
+        <ShareModal
+          target={{ kind: 'playlist', id: playlist.id, title: playlist.title }}
+          onClose={() => setSharing(false)}
+        />
       )}
     </DetailShell>
   );

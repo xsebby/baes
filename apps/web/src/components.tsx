@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import type { PlaylistSummary, Track, TrackPatch } from '@baes/core';
 import { formatSeconds, formatDuration, useAuth } from './state';
 import { usePlayer } from './player';
+import { ContextMenu, ShareModal, type MenuItem } from './menu';
 import { NextIcon, PauseIcon, PlayIcon, PreviousIcon, ShuffleIcon } from './player-icons';
 
 // ---- likes ----
@@ -65,14 +66,41 @@ export function TrackRow({
   onEdit?: (track: Track) => void;
   trailing?: React.ReactNode;
 }) {
-  const { client } = useAuth();
+  const { client, user } = useAuth();
   const { playTrack, current } = usePlayer();
   const { likedIds, toggleLike } = useLikes();
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const closeMenu = useCallback(() => setMenu(null), []);
   const active = current?.id === track.id;
   const liked = likedIds.has(track.id);
 
+  const menuItems: MenuItem[] = [
+    { label: 'Add to playlist…', onSelect: () => onAddToPlaylist(track) },
+    { label: liked ? 'Remove from liked' : 'Like', onSelect: () => toggleLike(track.id) },
+    ...(user?.role === 'owner' ? [{ label: 'Share…', onSelect: () => setSharing(true) }] : []),
+    ...(user?.canDownload
+      ? [
+          {
+            label: 'Download',
+            onSelect: () => {
+              window.location.href = `${client.mediaUrl(track.streamUrl)}&download=1`;
+            },
+          },
+        ]
+      : []),
+    ...(onEdit ? [{ label: 'Edit details…', onSelect: () => onEdit(track) }] : []),
+  ];
+
   return (
-    <div className="track-row" onClick={() => playTrack(track, queue)}>
+    <div
+      className={`track-row${menu ? ' menu-open' : ''}`}
+      onClick={() => playTrack(track, queue)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setMenu({ x: e.clientX, y: e.clientY });
+      }}
+    >
       {track.artUrl ? (
         <img className="art" src={client.mediaUrl(track.artUrl)} alt="" />
       ) : (
@@ -119,6 +147,25 @@ export function TrackRow({
       )}
       <div className="dur">{formatDuration(track.durationMs)}</div>
       {trailing}
+      <button
+        className="rowbtn more"
+        title="More"
+        aria-label="More options"
+        onClick={(e) => {
+          e.stopPropagation();
+          const r = e.currentTarget.getBoundingClientRect();
+          setMenu(menu ? null : { x: r.right - 200, y: r.bottom + 4 });
+        }}
+      >
+        ⋯
+      </button>
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={closeMenu} />}
+      {sharing && (
+        <ShareModal
+          target={{ kind: 'track', id: track.id, title: track.title }}
+          onClose={() => setSharing(false)}
+        />
+      )}
     </div>
   );
 }

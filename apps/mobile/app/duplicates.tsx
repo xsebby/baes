@@ -79,7 +79,16 @@ export default function DuplicatesScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await client?.deleteTrack(track.id);
+              const res = await client?.deleteTrack(track.id);
+              // Files in your own library folders aren't deleted from disk, so
+              // the copy comes back on the next scan unless you remove it there.
+              if (res && !res.deletedFile) {
+                Alert.alert(
+                  'Removed from bæs only',
+                  res.note ??
+                    'The file is still in your library folder. Delete it there too, or it will return on the next scan.',
+                );
+              }
             } catch (e) {
               Alert.alert("Couldn't delete", e instanceof Error ? e.message : undefined);
             }

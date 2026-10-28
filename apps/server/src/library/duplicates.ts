@@ -4,7 +4,7 @@ import { setPriority } from 'node:os';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { duplicatePairs, libraryRoots, trackFingerprints, tracks } from '@baes/db';
 import type { Database } from '../db.js';
 
@@ -139,7 +139,20 @@ export class DuplicateFinder {
     // `fp index` only appends, so a file that changed or disappeared since it
     // was fingerprinted would leave a stale entry. Start over in that case;
     // it's a background job and only takes minutes.
-    const stale = done.some((d) => byId.get(d.trackId)?.contentHash !== d.contentHash);
+    const changed = done
+      .filter((d) => byId.get(d.trackId)?.contentHash !== d.contentHash)
+      .map((d) => d.trackId);
+    const stale = changed.length > 0;
+    if (stale) {
+      // Their old matches describe audio that's gone. Pairs between unchanged
+      // tracks stay, with any dismissals.
+      for (let i = 0; i < changed.length; i += 500) {
+        const ids = changed.slice(i, i + 500);
+        await this.db
+          .delete(duplicatePairs)
+          .where(or(inArray(duplicatePairs.trackA, ids), inArray(duplicatePairs.trackB, ids)));
+      }
+    }
     if (stale || (done.length > 0 && !existsSync(this.indexPath))) {
       this.log.info({ stale }, 'rebuilding fingerprint index');
       await rm(this.indexPath, { force: true });

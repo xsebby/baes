@@ -35,6 +35,8 @@ export default function Library() {
   const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
   const [tags, setTags] = useState<TagSummary[]>([]);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  // Read inside load() so refreshes and searches keep the selected tag.
+  const tagRef = useRef<string | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,9 +48,12 @@ export default function Library() {
     async (q?: string) => {
       if (!client) return;
       setError(null);
+      const tag = tagRef.current;
       try {
         const [t, al, ar, pl, tg] = await Promise.all([
-          client.listTracks({ q: q || undefined, limit: 500 }),
+          // Filter on the server: a local filter over the first 500 would miss
+          // tagged songs further down a big library.
+          client.listTracks({ q: q || undefined, tag: tag ?? undefined, limit: 500 }),
           client.listAlbums(),
           client.listArtists(),
           client.listPlaylists(),
@@ -62,7 +67,7 @@ export default function Library() {
         setPlaylists(pl.playlists);
         setOffline(false);
         // Mirror to disk so the library stays browsable without a connection.
-        if (!q) writeCache('tracks', t.tracks);
+        if (!q && !tag) writeCache('tracks', t.tracks);
         writeCache('albums', al.albums);
         writeCache('artists', ar.artists);
         writeCache('playlists', pl.playlists);
@@ -74,13 +79,13 @@ export default function Library() {
         if (ct || ca || cr || cp) {
           const needle = (q ?? '').toLowerCase();
           setTracks(
-            needle
-              ? (ct ?? []).filter(
-                  (x) =>
-                    x.title.toLowerCase().includes(needle) ||
-                    (x.artistName ?? '').toLowerCase().includes(needle),
-                )
-              : (ct ?? []),
+            (ct ?? []).filter(
+              (x) =>
+                (!tag || x.tag === tag) &&
+                (!needle ||
+                  x.title.toLowerCase().includes(needle) ||
+                  (x.artistName ?? '').toLowerCase().includes(needle)),
+            ),
           );
           setAlbums(ca ?? []);
           setArtists(cr ?? []);
@@ -278,7 +283,8 @@ export default function Library() {
       );
     }
 
-    if (tracks.length === 0) {
+    // With a tag selected, keep the list (and its chips) so the filter can be cleared.
+    if (tracks.length === 0 && !tagFilter) {
       return (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>{query ? 'No matches' : 'No music yet'}</Text>
@@ -291,11 +297,10 @@ export default function Library() {
       );
     }
 
-    const shown = tagFilter ? tracks.filter((t) => t.tag === tagFilter) : tracks;
     return (
       <FlatList
         key="songs"
-        data={shown}
+        data={tracks}
         keyExtractor={(t) => t.id}
         refreshControl={refreshControl}
         ListHeaderComponent={
@@ -311,7 +316,11 @@ export default function Library() {
                   <Pressable
                     key={t.tag}
                     style={[styles.tagChip, on && styles.tagChipOn]}
-                    onPress={() => setTagFilter(on ? null : t.tag)}
+                    onPress={() => {
+                      tagRef.current = on ? null : t.tag;
+                      setTagFilter(tagRef.current);
+                      load(query);
+                    }}
                   >
                     <Text style={[styles.tagChipText, on && styles.tagChipTextOn]}>
                       {t.tag} {t.label ?? ''} {t.count}
@@ -322,7 +331,7 @@ export default function Library() {
             </ScrollView>
           ) : null
         }
-        renderItem={({ item }) => <TrackRow track={item} queue={shown} />}
+        renderItem={({ item }) => <TrackRow track={item} queue={tracks} />}
       />
     );
   }

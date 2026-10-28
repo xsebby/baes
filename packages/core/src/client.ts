@@ -115,11 +115,12 @@ export class ApiClient {
 
   // ---- Library ----
 
-  listTracks(opts: { q?: string; limit?: number; offset?: number } = {}): Promise<{
+  listTracks(opts: { q?: string; tag?: string; limit?: number; offset?: number } = {}): Promise<{
     tracks: Track[];
   }> {
     const params = new URLSearchParams();
     if (opts.q) params.set('q', opts.q);
+    if (opts.tag) params.set('tag', opts.tag);
     if (opts.limit) params.set('limit', String(opts.limit));
     if (opts.offset) params.set('offset', String(opts.offset));
     const qs = params.toString();

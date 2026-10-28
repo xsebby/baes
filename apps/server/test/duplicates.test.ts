@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
+import { appendFile, chmod, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -10,6 +10,7 @@ import { writeFixtureLibrary } from './fixtures.js';
 // A stand-in for baes-fingerprint's `fp`: `index` appends file names to the
 // "index" (a text file), `query` answers from a script keyed by file name.
 // Song A and Song B are the same recording; the demo resembles A, weakly.
+// Names listed in "<index>.silent" match nothing (their audio "changed").
 const FAKE_FP = `#!/usr/bin/env node
 const fs = require('fs');
 const path = require('path');
@@ -29,7 +30,9 @@ const script = {
   'Artist One - Song B.wav': [['Artist One - Song B.wav', 880], ['Artist One - Song A.wav', 251]],
   'untitled_demo_v2.wav': [['untitled_demo_v2.wav', 700]],
 };
-const matches = (script[path.basename(file)] || [])
+const silent = fs.existsSync(db + '.silent') ? fs.readFileSync(db + '.silent', 'utf8').split('\\n') : [];
+const matches = (silent.includes(path.basename(file)) ? [] : script[path.basename(file)] || [])
+  .filter(([b]) => !silent.includes(b))
   .map(([b, votes]) => ({ name: byBase(b), votes, offset_s: 0 }))
   .filter((m) => m.name && m.votes >= 60);
 process.stdout.write(JSON.stringify({ match: matches[0] ? matches[0].name : null, matches }) + '\\n');
@@ -113,6 +116,21 @@ describe('duplicate recordings', () => {
       fs.readFileSync(path.join(dataDir, 'fingerprints.fpdb.calls'), 'utf8').trim().split('\n'),
     );
     expect(calls).toEqual(['index 3 jobs=1']);
+  });
+
+  it('replacing a file with different audio drops its old matches', async () => {
+    const songA = path.join(musicDir, 'album1', 'Artist One - Song A.wav');
+    const silent = path.join(dataDir, 'fingerprints.fpdb.silent');
+    await writeFile(silent, 'Artist One - Song A.wav');
+    await appendFile(songA, Buffer.alloc(64, 1)); // new bytes, new content hash
+    try {
+      expect((await scanAndWait()).groups).toHaveLength(0);
+    } finally {
+      await unlink(silent);
+    }
+    // Back to matching audio: the pair is found again.
+    await appendFile(songA, Buffer.alloc(64, 2));
+    expect((await scanAndWait()).groups).toHaveLength(1);
   });
 
   it('dismissing a group keeps it hidden across rescans', async () => {

@@ -159,12 +159,12 @@ describe('share links', () => {
     expect(zip.headers['content-disposition']).toBe("attachment; filename*=UTF-8''zip%20me.zip");
     const bytes = zip.rawPayload;
     expect(bytes.subarray(0, 2).toString()).toBe('PK');
-    const text = bytes.toString('latin1');
     // Entries are named "<n> <file name>"; fixture file names end in "<title>.wav".
-    const first = text.search(new RegExp(`1 [^\\0]*${view.items[0].title}\\.wav`));
-    const second = text.search(new RegExp(`2 [^\\0]*${view.items[1].title}\\.wav`));
-    expect(first).toBeGreaterThan(-1);
-    expect(second).toBeGreaterThan(first);
+    // archiver stats files in parallel, so entry order can vary; the number prefix is the order.
+    const names = zipEntryNames(bytes).sort();
+    expect(names).toHaveLength(2);
+    expect(names[0]).toMatch(new RegExp(`^1 .*${view.items[0].title}\\.wav$`));
+    expect(names[1]).toMatch(new RegExp(`^2 .*${view.items[1].title}\\.wav$`));
   });
 
   it('refuses the zip when downloads are off', async () => {
@@ -226,3 +226,19 @@ describe('share links', () => {
     expect(missing.statusCode).toBe(404);
   });
 });
+
+/** Entry names from the central directory (searching the raw bytes can hit file data). */
+function zipEntryNames(zip: Buffer): string[] {
+  const eocd = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  const count = zip.readUInt16LE(eocd + 10);
+  let at = zip.readUInt32LE(eocd + 16);
+  const names: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const nameLen = zip.readUInt16LE(at + 28);
+    const extraLen = zip.readUInt16LE(at + 30);
+    const commentLen = zip.readUInt16LE(at + 32);
+    names.push(zip.subarray(at + 46, at + 46 + nameLen).toString('utf8'));
+    at += 46 + nameLen + extraLen + commentLen;
+  }
+  return names;
+}

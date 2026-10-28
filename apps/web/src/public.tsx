@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiClient, type SharedItem, type SharedView } from '@baes/core';
+import { LegalLinks } from './legal';
 
 // ---- Icons ----
 
@@ -43,6 +44,73 @@ const Icon = {
     </svg>
   ),
 };
+
+const VolumeIcon = {
+  on: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 9.5h3.2L12 5.6v12.8l-4.8-3.9H4z" />
+      <path className="stroke" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />
+    </svg>
+  ),
+  off: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 9.5h3.2L12 5.6v12.8l-4.8-3.9H4z" />
+      <path className="stroke" d="m16 9.5 5 5m0-5-5 5" />
+    </svg>
+  ),
+};
+
+/** iOS Safari ignores `audio.volume` (hardware buttons only), so the slider would do nothing. */
+const canSetVolume = (() => {
+  try {
+    const a = new Audio();
+    a.volume = 0.5;
+    return a.volume === 0.5;
+  } catch {
+    return false;
+  }
+})();
+
+function readVolume(): number {
+  try {
+    const v = Number(localStorage.getItem('baes.share.volume'));
+    return Number.isFinite(v) && v > 0 && v <= 1 ? v : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function Volume({
+  volume,
+  muted,
+  onVolume,
+  onMute,
+}: {
+  volume: number;
+  muted: boolean;
+  onVolume: (v: number) => void;
+  onMute: () => void;
+}) {
+  if (!canSetVolume) return null;
+  const shown = muted ? 0 : volume;
+  return (
+    <div className="share-volume">
+      <button onClick={onMute} aria-label={muted ? 'Unmute' : 'Mute'}>
+        {shown === 0 ? VolumeIcon.off : VolumeIcon.on}
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.01}
+        value={shown}
+        aria-label="Volume"
+        style={{ '--pct': `${shown * 100}%` } as React.CSSProperties}
+        onChange={(e) => onVolume(Number(e.target.value))}
+      />
+    </div>
+  );
+}
 
 function Bars() {
   return (
@@ -120,18 +188,6 @@ function HeroVisual() {
           <span className="ctl big">{Icon.pause}</span>
           <span className="ctl">{Icon.next}</span>
         </div>
-      </div>
-      <div className="float-card dup">
-        <div className="float-head">Possible duplicates</div>
-        <div className="float-row">
-          <span className="wave" />
-          <span>3 copies · same recording</span>
-        </div>
-      </div>
-      <div className="float-card link">
-        <div className="float-head">Link ready</div>
-        <div className="float-row mono">music…/s/OO1x…</div>
-        <div className="float-sub">expires in 7 days · downloads on</div>
       </div>
     </div>
   );
@@ -242,6 +298,7 @@ export function Landing({ onSignIn }: { onSignIn: () => void }) {
       <footer className="landing-foot">
         <span className="landing-logo small">bæs</span>
         <span>Invite only.</span>
+        <LegalLinks />
         <button className="landing-foot-link" onClick={onSignIn}>
           Sign in →
         </button>
@@ -277,7 +334,37 @@ export function SharePage({ token }: { token: string }) {
   const [current, setCurrent] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState({ at: 0, total: 0 });
+  const [volume, setVolume] = useState(readVolume);
+  const [muted, setMuted] = useState(false);
   const audio = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    const el = audio.current;
+    if (!el) return;
+    el.volume = volume;
+    el.muted = muted;
+  }, [volume, muted, view]);
+
+  function changeVolume(v: number) {
+    setVolume(v);
+    setMuted(v === 0);
+    if (v > 0) {
+      try {
+        localStorage.setItem('baes.share.volume', String(v));
+      } catch {
+        // private mode: volume just won't be remembered
+      }
+    }
+  }
+
+  const volumeControl = (
+    <Volume
+      volume={volume}
+      muted={muted}
+      onVolume={changeVolume}
+      onMute={() => (muted || volume === 0 ? changeVolume(volume || 1) : setMuted(true))}
+    />
+  );
 
   useEffect(() => {
     client
@@ -382,6 +469,7 @@ export function SharePage({ token }: { token: string }) {
             />
             <span>{formatMs((time.total || first.durationMs / 1000) * 1000)}</span>
           </div>
+          {volumeControl}
           {downloadButton}
           {view.expiresAt && (
             <p className="share-expiry">
@@ -492,7 +580,7 @@ export function SharePage({ token }: { token: string }) {
               <span>{formatMs(time.total * 1000)}</span>
             </div>
           </div>
-          <span className="player-spacer" />
+          <div className="player-right">{volumeControl}</div>
         </div>
       )}
 
@@ -509,7 +597,10 @@ export function SharePage({ token }: { token: string }) {
           if (current !== null && current + 1 < view.items.length) play(current + 1);
         }}
       />
-      <footer className="landing-foot">Shared from bæs · a private music server</footer>
+      <footer className="landing-foot">
+        Shared from bæs · a private music server
+        <LegalLinks />
+      </footer>
     </div>
   );
 }

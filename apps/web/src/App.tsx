@@ -5,6 +5,7 @@ import { PlayerProvider } from './player';
 import { AddToPlaylistModal, LikesProvider, PlayerBar } from './components';
 import { FullscreenPlayer } from './Fullscreen';
 import { Landing, SharePage } from './public';
+import { LegalPage } from './legal';
 import { ACCENTS, applyTheme, loadTheme, saveTheme, type ThemeSettings } from './theme';
 import {
   AdminView,
@@ -268,6 +269,8 @@ export default function App() {
   // Share links work without an account, so they bypass auth entirely.
   const share = /^\/s\/([A-Za-z0-9_-]+)\/?$/.exec(window.location.pathname);
   if (share) return <SharePage token={share[1]!} />;
+  const legal = /^\/(terms|privacy)\/?$/.exec(window.location.pathname);
+  if (legal) return <LegalPage doc={legal[1] as 'terms' | 'privacy'} />;
   return (
     <AuthProvider>
       <Gate />

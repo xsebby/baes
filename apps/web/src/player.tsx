@@ -40,6 +40,8 @@ interface NowPlaying {
   title: string;
   artist: string | null;
   album: string | null;
+  /** Absolute cover URL Discord can fetch, or null. */
+  artUrl: string | null;
   positionSec: number;
   durationSec: number;
   rate: number;
@@ -205,10 +207,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [skipTo, ensureAnalyser]);
 
   // Desktop app only: Discord shows what's playing, cleared while paused.
+  const artLinks = useRef(new Map<string, { url: string; expiresAt: number }>());
   useEffect(() => {
     const desktop = window.baesDesktop;
     if (!desktop) return;
     const audio = audioRef.current;
+    let art: string | null = null;
+    let cancelled = false;
     const report = () =>
       desktop.setNowPlaying(
         current && !audio.paused
@@ -216,6 +221,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
               title: current.title,
               artist: current.artistName,
               album: current.albumTitle,
+              artUrl: art,
               positionSec: audio.currentTime,
               durationSec: audio.duration || current.durationMs / 1000,
               rate: audio.playbackRate,
@@ -223,16 +229,37 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           : null,
       );
     report();
+    // Discord fetches the cover itself, so it needs a fresh absolute link
+    // (library art URLs expire an hour after the page loaded them).
+    const albumId = current?.artUrl ? current.albumId : null;
+    if (albumId) {
+      const cached = artLinks.current.get(albumId);
+      if (cached && cached.expiresAt > Date.now() + 60 * 60 * 1000) {
+        art = cached.url;
+        report();
+      } else {
+        client
+          .artLink(albumId)
+          .then(({ url, expiresAt }) => {
+            artLinks.current.set(albumId, { url, expiresAt: Date.parse(expiresAt) });
+            if (cancelled) return;
+            art = url;
+            report();
+          })
+          .catch(() => {});
+      }
+    }
     // Seeks and speed changes move the end time Discord counts down to.
     audio.addEventListener('seeked', report);
     audio.addEventListener('ratechange', report);
     audio.addEventListener('durationchange', report);
     return () => {
+      cancelled = true;
       audio.removeEventListener('seeked', report);
       audio.removeEventListener('ratechange', report);
       audio.removeEventListener('durationchange', report);
     };
-  }, [current, playing]);
+  }, [client, current, playing]);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;

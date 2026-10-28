@@ -204,6 +204,11 @@ export class ApiClient {
   }
 
   /** Resolve a signed relative media path against the server base URL. */
+  /** Absolute cover URL valid for a day, for services that fetch it themselves. */
+  artLink(id: string): Promise<{ url: string; expiresAt: string }> {
+    return this.request('GET', `/api/art/${id}/link`);
+  }
+
   mediaUrl(relative: string): string {
     return `${this.baseUrl}${relative}`;
   }

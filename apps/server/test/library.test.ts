@@ -390,4 +390,26 @@ describe('streaming', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().url).toContain(`/api/stream/${id}`);
   });
+
+  it('hands out a day-long absolute cover link, only when signed in', async () => {
+    const albumId = (
+      await app.inject({ method: 'GET', url: '/api/albums', headers: auth() })
+    ).json().albums[0].id;
+    expect((await app.inject({ method: 'GET', url: `/api/art/${albumId}/link` })).statusCode).toBe(
+      401,
+    );
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/art/${albumId}/link`,
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(200);
+    const { url, expiresAt } = res.json();
+    expect(url).toMatch(new RegExp(`^https?://[^/]+/api/art/${albumId}\\?exp=\\d+&sig=`));
+    expect(Date.parse(expiresAt)).toBeGreaterThan(Date.now() + 23 * 3600 * 1000);
+    // The signature is valid without a session (the fixture album just has no cover).
+    const art = await app.inject({ method: 'GET', url: url.replace(/^https?:\/\/[^/]+/, '') });
+    expect(art.statusCode).toBe(404);
+    expect(art.json().message).toBe('No art');
+  });
 });

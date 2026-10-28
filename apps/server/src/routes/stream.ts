@@ -7,7 +7,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { albums, libraryRoots, playlists, tracks } from '@baes/db';
 import type { Database } from '../db.js';
 import type { Config } from '../config.js';
-import { verifyMedia } from '../library/signing.js';
+import { mediaPath, verifyMedia } from '../library/signing.js';
 
 interface RouteOpts {
   db: Database;
@@ -191,6 +191,8 @@ export async function serveArt(db: Database, reply: FastifyReply, id: string) {
   return reply.type('image/jpeg').send(createReadStream(artPath));
 }
 
+const ART_LINK_TTL_SECONDS = 24 * 60 * 60;
+
 export const streamRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, config }) => {
   app.get('/api/stream/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -204,6 +206,15 @@ export const streamRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
       return reply.code(403).send({ error: 'forbidden', message: 'Invalid or expired URL' });
     }
     return serveTrack(db, req, reply, id, { profile, download: download === '1' });
+  });
+
+  // A long-lived absolute cover URL for services that fetch it themselves
+  // (Discord presence in the desktop app). Signed like any media URL.
+  app.get('/api/art/:id/link', { preHandler: app.requireAuth }, async (req) => {
+    const { id } = req.params as { id: string };
+    const { url, expiresAt } = mediaPath('art', id, config.SERVER_SECRET, ART_LINK_TTL_SECONDS);
+    const origin = config.PUBLIC_URL ?? `${req.protocol}://${req.host}`;
+    return { url: `${origin}${url}`, expiresAt };
   });
 
   // Serves album covers and playlist covers by row id.

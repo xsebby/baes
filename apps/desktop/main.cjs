@@ -5,7 +5,7 @@ const { DiscordPresence } = require('./discord.cjs');
 
 const APP_URL = process.env.BAES_URL ?? 'https://music.sebby.dev';
 // Application ID from discord.com/developers (not a secret). Its name is what
-// Discord shows after "Listening to", and its "baes" art asset is the image.
+// Discord shows after "Listening to"; the image is the song's cover.
 const DISCORD_CLIENT_ID = process.env.BAES_DISCORD_CLIENT_ID ?? '';
 
 // ---- settings (userData/settings.json) ----
@@ -50,7 +50,11 @@ function toActivity(np) {
     timestamps: duration
       ? { start: Math.round(start), end: Math.round(start + (duration / rate) * 1000) }
       : { start: Math.round(start) },
-    assets: { large_image: 'baes', large_text: field(np.album || 'bæs') },
+    // Discord fetches https images itself; without a cover it shows the app icon.
+    assets:
+      typeof np.artUrl === 'string' && np.artUrl.startsWith('https://')
+        ? { large_image: np.artUrl, large_text: field(np.album || np.title) }
+        : undefined,
     instance: false,
   };
 }

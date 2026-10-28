@@ -35,6 +35,23 @@ interface PlayerState {
 
 const PlayerContext = createContext<PlayerState | null>(null);
 
+/** What the desktop app (apps/desktop/preload.cjs) passes on to Discord. */
+interface NowPlaying {
+  title: string;
+  artist: string | null;
+  album: string | null;
+  positionSec: number;
+  durationSec: number;
+  rate: number;
+}
+
+declare global {
+  interface Window {
+    /** Only present inside the bæs desktop app. */
+    baesDesktop?: { setNowPlaying: (np: NowPlaying | null) => void };
+  }
+}
+
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const { client } = useAuth();
   const audioRef = useRef<HTMLAudioElement>(new Audio());
@@ -186,6 +203,36 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skipTo, ensureAnalyser]);
+
+  // Desktop app only: Discord shows what's playing, cleared while paused.
+  useEffect(() => {
+    const desktop = window.baesDesktop;
+    if (!desktop) return;
+    const audio = audioRef.current;
+    const report = () =>
+      desktop.setNowPlaying(
+        current && !audio.paused
+          ? {
+              title: current.title,
+              artist: current.artistName,
+              album: current.albumTitle,
+              positionSec: audio.currentTime,
+              durationSec: audio.duration || current.durationMs / 1000,
+              rate: audio.playbackRate,
+            }
+          : null,
+      );
+    report();
+    // Seeks and speed changes move the end time Discord counts down to.
+    audio.addEventListener('seeked', report);
+    audio.addEventListener('ratechange', report);
+    audio.addEventListener('durationchange', report);
+    return () => {
+      audio.removeEventListener('seeked', report);
+      audio.removeEventListener('ratechange', report);
+      audio.removeEventListener('durationchange', report);
+    };
+  }, [current, playing]);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;

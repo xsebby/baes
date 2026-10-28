@@ -56,47 +56,46 @@ function Bars() {
 
 // ---- Landing page (signed-out visitors) ----
 
-const FEATURES: { icon: string; title: string; body: string }[] = [
+const VERSIONS: { title: string; tag?: string; note: string; length: string; playing?: boolean }[] =
+  [
+    { title: 'untitled (v3)', tag: '⭐', note: 'final', length: '3:04', playing: true },
+    { title: 'untitled (alt mix)', note: 'darker drums', length: '3:21' },
+    { title: 'untitled (v2)', tag: '✂️', note: 'snippet', length: '0:48' },
+    { title: 'untitled (demo)', note: 'voice memo', length: '2:12' },
+  ];
+
+const FEATURES: { title: string; body: string }[] = [
   {
-    icon: '◉',
-    title: 'Your library, streamed',
-    body: 'Unreleased tracks, demos and local files on your own server, playable anywhere over HTTPS.',
+    title: 'On your phone, offline',
+    body: 'A real iPhone app. Download a playlist and it plays on a plane, with lock-screen controls.',
   },
   {
-    icon: '↓',
-    title: 'Offline on iPhone',
-    body: 'A native app with lock-screen controls, offline downloads, speed and pitch, and a color-reactive player.',
+    title: 'Spotify, in the same place',
+    body: 'Your Spotify playlists sync in and play from your own files wherever they match.',
   },
   {
-    icon: '≋',
-    title: 'Finds duplicates by ear',
-    body: 'An audio fingerprinter in C++ spots the same recording across re-uploads, re-encodes and renamed copies.',
+    title: 'Tracker imports',
+    body: 'Pull songs straight from a tracker sheet. Its ⭐ and ✂️ markers become tags you can filter by.',
   },
   {
-    icon: '★',
-    title: 'Tracker tags, understood',
-    body: 'Grails, best-ofs and snippets from tracker imports become filterable tags instead of emoji clutter.',
+    title: 'No duplicate clutter',
+    body: 'Upload the same song twice under a different name and bæs notices.',
   },
   {
-    icon: '⇄',
-    title: 'Spotify, mirrored',
-    body: 'Your Spotify playlists sync in and match against local files, so one library holds everything.',
+    title: 'Any file you have',
+    body: 'MP3, FLAC, WAV, M4A, OGG, Opus, AIFF. Streams at full quality.',
   },
   {
-    icon: '⌁',
-    title: 'Share with a link',
-    body: 'Send a playlist or a song with an unlisted, expiring link. Friends listen in the browser, no account.',
+    title: 'Private by default',
+    body: 'Invite only, on a server you control. Nothing is public unless you share it.',
   },
 ];
 
-const STATS: { value: string; label: string }[] = [
-  { value: '98–100%', label: 'of clean or re-encoded clips identified from 3–10 s' },
-  { value: '~4,000×', label: 'realtime fingerprinting (30 s of audio in 7 ms)' },
-  { value: '2.9 GB → 373 MB', label: 'peak memory indexing a whole library' },
-  { value: '< 0.2 ms', label: 'to match a clip against the library' },
+const SHARE_ROWS: { title: string; length: string }[] = [
+  { title: 'untitled (v3)', length: '3:04' },
+  { title: 'pink sky', length: '2:47' },
+  { title: 'no signal (demo)', length: '1:58' },
 ];
-
-const FORMATS = ['MP3', 'FLAC', 'WAV', 'M4A', 'AAC', 'OGG', 'OPUS', 'AIFF'];
 
 function HeroVisual() {
   return (
@@ -141,124 +140,112 @@ function HeroVisual() {
 export function Landing({ onSignIn }: { onSignIn: () => void }) {
   return (
     <div className="landing">
-      <div className="aurora" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </div>
-
       <header className="landing-nav">
         <span className="landing-logo">bæs</span>
-        <nav>
-          <a href="#features">Features</a>
-          <a href="#under-the-hood">Under the hood</a>
-          <a href="https://github.com/xsebby/baes" target="_blank" rel="noreferrer">
-            GitHub
-          </a>
-          <button className="landing-signin" onClick={onSignIn}>
-            Sign in
-          </button>
-        </nav>
+        <button className="landing-signin" onClick={onSignIn}>
+          Sign in
+        </button>
       </header>
 
       <section className="landing-hero">
         <div className="hero-copy">
-          <span className="eyebrow">Self-hosted · invite only</span>
           <h1>
             Your music.
             <br />
-            <span className="grad">Every version.</span>
+            <span className="dim">Every version.</span>
             <br />
             Your server.
           </h1>
           <p>
-            bæs is a private music player for the tracks streaming services don't have: unreleased
-            songs, demos, alternate mixes, and the rest of your collection, on a server you own.
+            A private player for the songs streaming doesn't have: unreleased tracks, demos, alt
+            mixes and snippets, all in one library you own.
           </p>
           <div className="landing-ctas">
             <button className="cta" onClick={onSignIn}>
               Sign in
             </button>
-            <a className="cta-ghost" href="#features">
-              See what it does
-            </a>
+            <span className="cta-note">Invite only</span>
           </div>
         </div>
         <HeroVisual />
       </section>
 
-      <div className="formats" aria-label="Supported formats">
-        <span className="formats-label">Plays</span>
-        {FORMATS.map((f) => (
-          <span key={f} className="format">
-            {f}
-          </span>
-        ))}
-      </div>
-
-      <section id="features" className="landing-section">
-        <h2>Built for music that doesn't fit anywhere else.</h2>
-        <div className="landing-grid">
-          {FEATURES.map((f) => (
-            <div key={f.title} className="landing-card">
-              <span className="card-icon">{f.icon}</span>
-              <h3>{f.title}</h3>
-              <p>{f.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section id="under-the-hood" className="landing-section hood">
-        <div className="hood-copy">
-          <span className="eyebrow">Under the hood</span>
-          <h2>A fingerprinter written from scratch in C++20.</h2>
+      <section className="landing-section split">
+        <div className="split-copy">
+          <h2>One song, every take.</h2>
           <p>
-            Every track is turned into a constellation of spectral peaks, paired into hashes, and
-            indexed, so bæs recognizes the same recording even when it's been re-encoded, renamed,
-            or re-uploaded. The FFT, the peak picking and the index are hand-built, and every number
-            below was measured on a real library.
+            The demo, the snippet, the mix that never came out. bæs keeps them together under one
+            title, so the song stays one song and you pick the take.
           </p>
         </div>
-        <div className="stats">
-          {STATS.map((s) => (
-            <div key={s.label} className="stat">
-              <span className="stat-value">{s.value}</span>
-              <span className="stat-label">{s.label}</span>
+        <div className="versions" aria-hidden="true">
+          <div className="versions-head">
+            <span>untitled</span>
+            <span>4 versions</span>
+          </div>
+          {VERSIONS.map((v) => (
+            <div key={v.title} className={'version' + (v.playing ? ' playing' : '')}>
+              <span className="version-icon">{v.playing ? <Bars /> : Icon.play}</span>
+              <span className="version-title">
+                {v.tag && <span className="version-tag">{v.tag}</span>}
+                {v.title}
+              </span>
+              <span className="version-note">{v.note}</span>
+              <span className="version-len">{v.length}</span>
             </div>
           ))}
         </div>
       </section>
 
       <section className="landing-section">
-        <h2>Share in three taps.</h2>
-        <ol className="steps">
-          <li>
-            <span className="step-n">1</span>
-            <h3>Pick a song or playlist</h3>
-            <p>Tap share from the player or any playlist.</p>
-          </li>
-          <li>
-            <span className="step-n">2</span>
-            <h3>Choose how long</h3>
-            <p>A day, a week, a month, or forever. Downloads on or off.</p>
-          </li>
-          <li>
-            <span className="step-n">3</span>
-            <h3>Send the link</h3>
-            <p>They listen in any browser. Revoke it whenever you want.</p>
-          </li>
-        </ol>
+        <h2>Everything else you'd want.</h2>
+        <dl className="feature-list">
+          {FEATURES.map((f) => (
+            <div key={f.title}>
+              <dt>{f.title}</dt>
+              <dd>{f.body}</dd>
+            </div>
+          ))}
+        </dl>
       </section>
 
-      <section className="landing-final">
-        <h2>Your library deserves better than a folder.</h2>
-        <button className="cta" onClick={onSignIn}>
-          Sign in to bæs
+      <section className="landing-section split reverse">
+        <div className="split-copy">
+          <h2>Send a song, not a file.</h2>
+          <p>
+            Make a link for a song or a playlist. It can expire in a day or never, downloads on or
+            off, and you can take it back anytime. Friends listen in the browser, no account needed.
+          </p>
+        </div>
+        <div className="share-mock" aria-hidden="true">
+          <div className="share-mock-top">
+            <div className="share-mock-art" />
+            <div>
+              <div className="share-mock-title">late nights</div>
+              <div className="share-mock-sub">3 songs · shared by sebby</div>
+            </div>
+          </div>
+          {SHARE_ROWS.map((r, i) => (
+            <div key={r.title} className="share-mock-row">
+              <span className="share-mock-n">{i + 1}</span>
+              <span className="share-mock-name">{r.title}</span>
+              <span className="share-mock-len">{r.length}</span>
+            </div>
+          ))}
+          <div className="share-mock-foot">
+            <span className="share-mock-btn">{Icon.download} Download all</span>
+            <span>expires in 7 days</span>
+          </div>
+        </div>
+      </section>
+
+      <footer className="landing-foot">
+        <span className="landing-logo small">bæs</span>
+        <span>Invite only.</span>
+        <button className="landing-foot-link" onClick={onSignIn}>
+          Sign in →
         </button>
-      </section>
-
-      <footer className="landing-foot">bæs · self-hosted · invite only · built by sebby</footer>
+      </footer>
     </div>
   );
 }

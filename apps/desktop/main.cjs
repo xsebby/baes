@@ -6,7 +6,7 @@ const { DiscordPresence } = require('./discord.cjs');
 const APP_URL = process.env.BAES_URL ?? 'https://music.sebby.dev';
 // Application ID from discord.com/developers (not a secret). Its name is what
 // Discord shows after "Listening to"; the image is the song's cover.
-const DISCORD_CLIENT_ID = process.env.BAES_DISCORD_CLIENT_ID ?? '';
+const DISCORD_CLIENT_ID = process.env.BAES_DISCORD_CLIENT_ID ?? '1565138664474808350';
 
 // ---- settings (userData/settings.json) ----
 

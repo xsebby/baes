@@ -10,12 +10,13 @@ const DISCORD_CLIENT_ID = process.env.BAES_DISCORD_CLIENT_ID ?? '156513866447480
 
 // ---- settings (userData/settings.json) ----
 
+const DEFAULT_SETTINGS = { discord: true, openAtLogin: true };
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 function loadSettings() {
   try {
-    return { discord: true, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf8')) };
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf8')) };
   } catch {
-    return { discord: true };
+    return { ...DEFAULT_SETTINGS };
   }
 }
 function saveSettings(settings) {
@@ -29,7 +30,7 @@ function saveSettings(settings) {
 // ---- Discord Rich Presence ----
 
 let presence = null;
-let settings = { discord: true };
+let settings = { ...DEFAULT_SETTINGS };
 
 /** Discord wants 2–128 characters per field. */
 const field = (s) => {
@@ -65,8 +66,14 @@ ipcMain.on('now-playing', (event, np) => {
   if (presence && settings.discord) presence.set(toActivity(np));
 });
 
-function createWindow() {
-  const win = new BrowserWindow({
+// ---- window: closing hides it, so music (and presence) keep going ----
+
+let win = null;
+let quitting = false;
+
+function createWindow({ show = true } = {}) {
+  win = new BrowserWindow({
+    show,
     width: 1240,
     height: 800,
     minWidth: 720,
@@ -81,10 +88,23 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       preload: path.join(__dirname, 'preload.cjs'),
+      // Hidden windows keep full-speed timers, so playback and the queue
+      // behave the same in the background.
+      backgroundThrottling: false,
     },
   });
 
   win.loadURL(APP_URL);
+
+  // Like Spotify: the red button (and Cmd+W) hides the window; Cmd+Q quits.
+  win.on('close', (event) => {
+    if (quitting) return;
+    event.preventDefault();
+    win.hide();
+  });
+  win.on('closed', () => {
+    win = null;
+  });
 
   // Keep the app single-origin; external links (e.g. open.spotify.com) go to the browser.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -99,8 +119,17 @@ function createWindow() {
   });
 }
 
+function showWindow() {
+  if (win) win.show();
+  else createWindow();
+}
+
 app.whenReady().then(() => {
   settings = loadSettings();
+  // Kept in sync with the setting each launch (the system list can be edited
+  // in System Settings → General → Login Items too).
+  // Only the installed app: a dev run would register the bare Electron binary.
+  if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: settings.openAtLogin });
   presence = new DiscordPresence(DISCORD_CLIENT_ID, (...a) => console.warn(...a));
   // Standard menu so Cmd+R / Cmd+C / Cmd+Q work; the window has no menu bar UI.
   Menu.setApplicationMenu(
@@ -121,6 +150,17 @@ app.whenReady().then(() => {
               if (!item.checked) presence.set(null);
             },
           },
+          {
+            label: 'Open at Login',
+            type: 'checkbox',
+            checked: settings.openAtLogin,
+            enabled: app.isPackaged,
+            click: (item) => {
+              settings.openAtLogin = item.checked;
+              saveSettings(settings);
+              app.setLoginItemSettings({ openAtLogin: item.checked });
+            },
+          },
           { type: 'separator' },
           { role: 'hide' },
           { role: 'hideOthers' },
@@ -134,13 +174,16 @@ app.whenReady().then(() => {
       { role: 'windowMenu' },
     ]),
   );
-  createWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+  // Started by login: load in the background, no window in your face.
+  createWindow({ show: !app.getLoginItemSettings().wasOpenedAtLogin });
+  // Clicking the Dock icon brings the window back.
+  app.on('activate', showWindow);
 });
 
-app.on('before-quit', () => presence?.stop());
+app.on('before-quit', () => {
+  quitting = true;
+  presence?.stop();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

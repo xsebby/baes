@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -11,6 +12,15 @@ let app: FastifyInstance;
 let musicDir: string;
 let dataDir: string;
 let token: string;
+
+const hasFfmpeg = (() => {
+  try {
+    execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 const auth = () => ({ authorization: `Bearer ${token}` });
 
@@ -411,5 +421,69 @@ describe('streaming', () => {
     const art = await app.inject({ method: 'GET', url: url.replace(/^https?:\/\/[^/]+/, '') });
     expect(art.statusCode).toBe(404);
     expect(art.json().message).toBe('No art');
+  });
+
+  it('cover links stay the same between responses and come resized', async () => {
+    const albumId = (
+      await app.inject({ method: 'GET', url: '/api/albums', headers: auth() })
+    ).json().albums[0].id;
+    const cover = path.join(dataDir, 'cover-src.jpg');
+    let image = Buffer.from('not really a jpeg');
+    if (hasFfmpeg) {
+      execFileSync('ffmpeg', [
+        '-v',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'color=red:s=1200x1200',
+        '-frames:v',
+        '1',
+        '-y',
+        cover,
+      ]);
+      image = await readFile(cover);
+    }
+    const boundary = '----baescover';
+    const upload = await app.inject({
+      method: 'POST',
+      url: `/api/albums/${albumId}/cover`,
+      headers: { ...auth(), 'content-type': `multipart/form-data; boundary=${boundary}` },
+      payload: Buffer.concat([
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="c.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`,
+        ),
+        image,
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]),
+    });
+    expect(upload.statusCode).toBe(204);
+
+    const artUrl = async () =>
+      (await app.inject({ method: 'GET', url: `/api/albums/${albumId}`, headers: auth() })).json()
+        .artUrl as string;
+    const url = await artUrl();
+    await new Promise((r) => setTimeout(r, 1100));
+    expect(await artUrl()).toBe(url); // cacheable: not re-signed every second
+
+    const full = await app.inject({ method: 'GET', url });
+    expect(full.statusCode).toBe(200);
+    expect(full.rawPayload.equals(image)).toBe(true);
+    const again = await app.inject({
+      method: 'GET',
+      url,
+      headers: { 'if-none-match': full.headers.etag as string },
+    });
+    expect(again.statusCode).toBe(304);
+
+    const small = await app.inject({ method: 'GET', url: `${url}&w=160` });
+    expect(small.statusCode).toBe(200);
+    if (hasFfmpeg) {
+      expect(small.rawPayload.length).toBeLessThan(image.length);
+      expect(small.headers.etag).not.toBe(full.headers.etag);
+    }
+    // Unknown widths get the original rather than a resize of any size.
+    const odd = await app.inject({ method: 'GET', url: `${url}&w=33` });
+    expect(odd.rawPayload.equals(image)).toBe(true);
   });
 });

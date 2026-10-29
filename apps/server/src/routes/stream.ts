@@ -7,7 +7,8 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { albums, libraryRoots, playlists, tracks } from '@baes/db';
 import type { Database } from '../db.js';
 import type { Config } from '../config.js';
-import { mediaPath, verifyMedia } from '../library/signing.js';
+import { artPath as signedArtPath, verifyMedia } from '../library/signing.js';
+import { parseArtWidth, sizedArt } from '../library/art-thumbs.js';
 
 interface RouteOpts {
   db: Database;
@@ -169,7 +170,7 @@ export async function serveTrack(
 }
 
 /** Sends an album or playlist cover by row id. Callers do the authorization. */
-export async function serveArt(db: Database, reply: FastifyReply, id: string) {
+export async function serveArt(db: Database, req: FastifyRequest, reply: FastifyReply, id: string) {
   const [album] = await db
     .select({ artPath: albums.artPath })
     .from(albums)
@@ -187,11 +188,22 @@ export async function serveArt(db: Database, reply: FastifyReply, id: string) {
   if (!artPath) {
     return reply.code(404).send({ error: 'not_found', message: 'No art' });
   }
-  reply.header('Cache-Control', 'private, max-age=86400');
-  return reply.type('image/jpeg').send(createReadStream(artPath));
+  const width = parseArtWidth((req.query as { w?: string }).w);
+  const file = width ? await sizedArt(artPath, width) : artPath;
+  let info;
+  try {
+    info = await stat(file);
+  } catch {
+    return reply.code(404).send({ error: 'not_found', message: 'No art' });
+  }
+  // Links stay the same all day, so browsers check back with the ETag and get
+  // a 304 unless the cover was replaced.
+  const etag = `W/"${info.size.toString(36)}-${Math.floor(info.mtimeMs).toString(36)}"`;
+  reply.header('ETag', etag);
+  reply.header('Cache-Control', 'private, no-cache');
+  if (req.headers['if-none-match'] === etag) return reply.code(304).send();
+  return reply.type('image/jpeg').send(createReadStream(file));
 }
-
-const ART_LINK_TTL_SECONDS = 24 * 60 * 60;
 
 export const streamRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, config }) => {
   app.get('/api/stream/:id', async (req, reply) => {
@@ -212,7 +224,7 @@ export const streamRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
   // (Discord presence in the desktop app). Signed like any media URL.
   app.get('/api/art/:id/link', { preHandler: app.requireAuth }, async (req) => {
     const { id } = req.params as { id: string };
-    const { url, expiresAt } = mediaPath('art', id, config.SERVER_SECRET, ART_LINK_TTL_SECONDS);
+    const { url, expiresAt } = signedArtPath(id, config.SERVER_SECRET);
     const origin = config.PUBLIC_URL ?? `${req.protocol}://${req.host}`;
     return { url: `${origin}${url}`, expiresAt };
   });
@@ -224,6 +236,6 @@ export const streamRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, con
     if (!exp || !sig || !verifyMedia(config.SERVER_SECRET, 'art', id, Number(exp), sig)) {
       return reply.code(403).send({ error: 'forbidden', message: 'Invalid or expired URL' });
     }
-    return serveArt(db, reply, id);
+    return serveArt(db, req, reply, id);
   });
 };

@@ -27,3 +27,18 @@ export function mediaPath(kind: 'stream' | 'art', id: string, secret: string, tt
   const base = kind === 'stream' ? `/api/stream/${id}` : `/api/art/${id}`;
   return { url: `${base}?exp=${exp}&sig=${sig}`, expiresAt: new Date(exp * 1000).toISOString() };
 }
+
+const DAY_SECONDS = 24 * 60 * 60;
+
+/**
+ * Cover URLs change once a day instead of on every response, so browsers and
+ * image caches can reuse them. Each stays valid for 1 to 2 days.
+ */
+export function artPath(id: string, secret: string) {
+  const exp = (Math.floor(Date.now() / 1000 / DAY_SECONDS) + 2) * DAY_SECONDS;
+  const sig = signMedia(secret, 'art', id, exp);
+  return {
+    url: `/api/art/${id}?exp=${exp}&sig=${sig}`,
+    expiresAt: new Date(exp * 1000).toISOString(),
+  };
+}

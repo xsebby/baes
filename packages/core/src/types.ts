@@ -160,10 +160,12 @@ export interface TagSummary {
   label: string | null;
 }
 
+export type ShareKind = 'playlist' | 'album' | 'track';
+
 export interface ShareLink {
   id: string;
   token: string;
-  kind: 'playlist' | 'track';
+  kind: ShareKind;
   targetId: string;
   title: string;
   url: string;
@@ -188,8 +190,10 @@ export interface SharedItem {
 
 /** What anyone holding a share link sees. */
 export interface SharedView {
-  kind: 'playlist' | 'track';
+  kind: ShareKind;
   title: string;
+  /** The album's artist (album links only). */
+  artistName?: string | null;
   artUrl: string | null;
   allowDownload: boolean;
   /** Zip of every shared file, when downloads are allowed. */

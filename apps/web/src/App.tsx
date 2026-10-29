@@ -103,7 +103,7 @@ function Main() {
           onClick={() => setView({ type: 'playlist', id: p.id })}
         >
           {p.artUrl ? (
-            <img className="side-cover" src={client.mediaUrl(p.artUrl)} alt="" />
+            <img className="side-cover" src={client.artUrl(p.artUrl, 160)} alt="" />
           ) : (
             <span className="side-cover">☰</span>
           )}

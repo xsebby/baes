@@ -236,7 +236,7 @@ export function LibraryView({
                 onClick={() => navigate({ type: 'album', id: a.id })}
               >
                 {a.artUrl ? (
-                  <img className="cover" src={client.mediaUrl(a.artUrl)} alt="" />
+                  <img className="cover" src={client.artUrl(a.artUrl, 640)} alt="" />
                 ) : (
                   <div className="cover">◎</div>
                 )}
@@ -285,7 +285,7 @@ export function LibraryView({
                   <img
                     className="bubble"
                     style={{ borderRadius: 8, objectFit: 'cover' }}
-                    src={client.mediaUrl(p.artUrl)}
+                    src={client.artUrl(p.artUrl, 640)}
                     alt=""
                   />
                 ) : (
@@ -414,9 +414,19 @@ function PlayAllButton({ tracks }: { tracks: Track[] }) {
   );
 }
 
+/**
+ * Cover links stay the same all day, so after uploading a new cover the old
+ * image would stay on screen; a throwaway parameter makes the browser refetch.
+ */
+function withVersion(url: string, version: number) {
+  return version ? `${url}&v=${version}` : url;
+}
+
 export function AlbumView({ id, navigate, onAddToPlaylist }: ViewProps & { id: string }) {
-  const { client } = useAuth();
+  const { client, user } = useAuth();
   const [album, setAlbum] = useState<AlbumDetail | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [coverVersion, setCoverVersion] = useState(0);
   const [tracklistId, setTracklistId] = useState<string | null>(null);
   const [editing, setEditing] = useState<AlbumTracklist | 'new' | null>(null);
 
@@ -443,7 +453,11 @@ export function AlbumView({ id, navigate, onAddToPlaylist }: ViewProps & { id: s
     <DetailShell navigate={navigate}>
       <div className="detail-header">
         {album.artUrl ? (
-          <img className="cover" src={client.mediaUrl(album.artUrl)} alt="" />
+          <img
+            className="cover"
+            src={withVersion(client.artUrl(album.artUrl, 640), coverVersion)}
+            alt=""
+          />
         ) : (
           <div className="cover">◎</div>
         )}
@@ -494,6 +508,11 @@ export function AlbumView({ id, navigate, onAddToPlaylist }: ViewProps & { id: s
           </div>
           <div className="actions">
             <PlayAllButton tracks={shownTracks} />
+            {user?.role === 'owner' && (
+              <button className="iconbtn" onClick={() => setSharing(true)}>
+                Share
+              </button>
+            )}
             <label className="iconbtn" style={{ cursor: 'pointer' }}>
               Set cover
               <input
@@ -506,6 +525,7 @@ export function AlbumView({ id, navigate, onAddToPlaylist }: ViewProps & { id: s
                   const form = new FormData();
                   form.append('file', f);
                   await client.uploadAlbumCover(album.id, form);
+                  setCoverVersion(Date.now());
                   load();
                 }}
               />
@@ -526,6 +546,12 @@ export function AlbumView({ id, navigate, onAddToPlaylist }: ViewProps & { id: s
             setTracklistId(nextId);
             load();
           }}
+        />
+      )}
+      {sharing && (
+        <ShareModal
+          target={{ kind: 'album', id: album.id, title: album.title }}
+          onClose={() => setSharing(false)}
         />
       )}
     </DetailShell>
@@ -779,6 +805,7 @@ export function PlaylistView({ id, navigate, onAddToPlaylist }: ViewProps & { id
   const { client, user } = useAuth();
   const [playlist, setPlaylist] = useState<PlaylistDetail | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [coverVersion, setCoverVersion] = useState(0);
 
   const load = useCallback(() => {
     client
@@ -796,7 +823,11 @@ export function PlaylistView({ id, navigate, onAddToPlaylist }: ViewProps & { id
     <DetailShell navigate={navigate}>
       <div className="detail-header">
         {playlist.artUrl ? (
-          <img className="cover" src={client.mediaUrl(playlist.artUrl)} alt="" />
+          <img
+            className="cover"
+            src={withVersion(client.artUrl(playlist.artUrl, 640), coverVersion)}
+            alt=""
+          />
         ) : null}
         <div>
           <h2>{playlist.title}</h2>
@@ -820,6 +851,7 @@ export function PlaylistView({ id, navigate, onAddToPlaylist }: ViewProps & { id
                   const form = new FormData();
                   form.append('file', f);
                   await client.uploadPlaylistCover(playlist.id, form);
+                  setCoverVersion(Date.now());
                   load();
                 }}
               />

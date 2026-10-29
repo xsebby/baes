@@ -5,6 +5,7 @@ import archiver from 'archiver';
 import type { FastifyPluginAsync } from 'fastify';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import type { ShareKind } from '@baes/core';
 import { albums, artists, libraryRoots, playlistItems, playlists, shares, tracks } from '@baes/db';
 import type { Database } from '../db.js';
 import type { Config } from '../config.js';
@@ -17,7 +18,7 @@ interface RouteOpts {
 }
 
 const createSchema = z.object({
-  kind: z.enum(['playlist', 'track']),
+  kind: z.enum(['playlist', 'album', 'track']),
   targetId: z.string().uuid(),
   allowDownload: z.boolean().default(true),
   /** null = never expires */
@@ -39,14 +40,22 @@ function minutes(ms: number) {
 }
 
 /**
- * Unlisted share links. The owner creates a link for a playlist or a track;
+ * Unlisted share links. The owner creates a link for a playlist, album or track;
  * anyone with the link can stream it (and download it, if allowed) with no
  * account, until it expires or is revoked.
  */
 export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, config }) => {
   const shareUrl = (token: string) => `${config.PUBLIC_URL ?? ''}/s/${token}`;
 
-  async function targetTitle(kind: 'playlist' | 'track', id: string, userId: string) {
+  async function targetTitle(kind: ShareKind, id: string, userId: string) {
+    if (kind === 'album') {
+      const [a] = await db
+        .select({ title: albums.title })
+        .from(albums)
+        .where(and(eq(albums.id, id), isNull(albums.deletedAt)))
+        .limit(1);
+      return a?.title ?? null;
+    }
     if (kind === 'playlist') {
       const [p] = await db
         .select({ title: playlists.title })
@@ -122,9 +131,17 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
     return share;
   }
 
-  /** Track ids a share covers, in playlist order. */
+  /** Track ids a share covers, in playlist (or album) order. */
   async function sharedTrackIds(share: typeof shares.$inferSelect): Promise<string[]> {
     if (share.kind === 'track') return [share.targetId];
+    if (share.kind === 'album') {
+      const rows = await db
+        .select({ id: tracks.id })
+        .from(tracks)
+        .where(and(eq(tracks.albumId, share.targetId), isNull(tracks.deletedAt)))
+        .orderBy(asc(tracks.discNo), asc(tracks.trackNo), asc(tracks.title));
+      return rows.map((r) => r.id);
+    }
     const items = await db
       .select({ trackId: playlistItems.trackId })
       .from(playlistItems)
@@ -156,7 +173,7 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
     return serveTrack(db, req, reply, trackId, { download: download === '1' });
   });
 
-  /** The playlist's cover, or the album cover of a shared track. */
+  /** The playlist's cover, or the album cover of a shared track or album. */
   app.get('/api/s/:token/art/:id', async (req, reply) => {
     const { token, id } = req.params as { token: string; id: string };
     const share = await liveShare(token);
@@ -174,7 +191,7 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
       }
     }
     if (!allowed) return reply.code(404).send(NOT_FOUND);
-    return serveArt(db, reply, id);
+    return serveArt(db, req, reply, id);
   });
 
   // ---- link previews (Discord, iMessage, Slack…) ----
@@ -259,6 +276,28 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
           .join(' · ');
         meta['music:duration'] = String(Math.round(t.durationMs / 1000));
         artId = firstArt;
+      } else if (share?.kind === 'album') {
+        const [a] = await db
+          .select({ title: albums.title, year: albums.year, artistName: artists.name })
+          .from(albums)
+          .leftJoin(artists, eq(albums.artistId, artists.id))
+          .where(and(eq(albums.id, share.targetId), isNull(albums.deletedAt)))
+          .limit(1);
+        if (a) {
+          title = a.title;
+          const total = items.reduce((sum, i) => sum + i.durationMs, 0);
+          meta['og:type'] = 'music.album';
+          meta['og:description'] = [
+            'Album',
+            a.artistName,
+            a.year ? String(a.year) : null,
+            `${items.length} ${items.length === 1 ? 'song' : 'songs'}`,
+            total > 0 ? minutes(total) : null,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          artId = firstArt;
+        }
       } else if (share?.kind === 'playlist') {
         const [p] = await db
           .select({ title: playlists.title, artPath: playlists.artPath })
@@ -286,7 +325,7 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
       if (!meta['og:description']) meta['og:description'] = 'This link is invalid or has expired.';
       meta['og:title'] = title;
       if (share && artId) {
-        meta['og:image'] = `${origin}/api/s/${token}/art/${artId}`;
+        meta['og:image'] = `${origin}/api/s/${token}/art/${artId}?w=640`;
         const color = await artColor(artId);
         if (color) meta['theme-color'] = color;
       }
@@ -334,9 +373,9 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
       if (files.length === 0) return reply.code(404).send(NOT_FOUND);
       const byId = new Map(files.map((f) => [f.id, f]));
       const title =
-        share.kind === 'playlist'
-          ? ((await targetTitle('playlist', share.targetId, share.createdBy)) ?? 'playlist')
-          : 'song';
+        share.kind === 'track'
+          ? 'song'
+          : ((await targetTitle(share.kind, share.targetId, share.createdBy)) ?? share.kind);
 
       const zip = archiver('zip', { store: true });
       zip.on('warning', (err) => req.log.warn({ err }, 'share zip warning'));
@@ -374,7 +413,19 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
 
       let title: string | null;
       let artUrl: string | null = null;
-      if (share.kind === 'playlist') {
+      let artistName: string | null = null;
+      if (share.kind === 'album') {
+        const [a] = await db
+          .select({ title: albums.title, artPath: albums.artPath, artistName: artists.name })
+          .from(albums)
+          .leftJoin(artists, eq(albums.artistId, artists.id))
+          .where(and(eq(albums.id, share.targetId), isNull(albums.deletedAt)))
+          .limit(1);
+        if (!a) return reply.code(404).send(NOT_FOUND);
+        title = a.title;
+        artistName = a.artistName;
+        if (a.artPath) artUrl = `${base}/art/${share.targetId}`;
+      } else if (share.kind === 'playlist') {
         const [p] = await db
           .select({ title: playlists.title, artPath: playlists.artPath })
           .from(playlists)
@@ -436,6 +487,7 @@ export const shareRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, conf
       return {
         kind: share.kind,
         title: title ?? items[0]?.title ?? '',
+        artistName,
         artUrl: artUrl ?? items[0]?.artUrl ?? null,
         allowDownload: share.allowDownload,
         downloadAllUrl: share.allowDownload ? `${base}/download` : null,

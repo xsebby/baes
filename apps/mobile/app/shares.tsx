@@ -57,7 +57,7 @@ export default function SharesScreen() {
         <View style={[styles.link, l.expired && { opacity: 0.45 }]}>
           <View style={{ flex: 1 }}>
             <Text style={styles.linkTitle} numberOfLines={1}>
-              {l.kind === 'playlist' ? 'Playlist · ' : ''}
+              {l.kind === 'playlist' ? 'Playlist · ' : l.kind === 'album' ? 'Album · ' : ''}
               {l.title}
             </Text>
             <Text style={styles.hint}>

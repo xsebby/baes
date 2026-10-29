@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { ShareLink } from '@baes/core';
+import type { ShareKind, ShareLink } from '@baes/core';
 import { useAuth } from './state';
 
 // ---- context menu (⋯ button or right-click) ----
@@ -94,7 +94,7 @@ const EXPIRY: { label: string; days: number | null }[] = [
 ];
 
 export interface ShareTarget {
-  kind: 'track' | 'playlist';
+  kind: ShareKind;
   id: string;
   title: string;
 }
@@ -178,7 +178,7 @@ export function ShareModal({ target, onClose }: { target: ShareTarget; onClose: 
                 checked={allowDownload}
                 onChange={(e) => setAllowDownload(e.target.checked)}
               />
-              Let people download {target.kind === 'playlist' ? 'the songs' : 'the song'}
+              Let people download {target.kind === 'track' ? 'the song' : 'the songs'}
             </label>
             <p className="muted small">
               Anyone with the link can listen, no account needed. You can revoke it in Admin →

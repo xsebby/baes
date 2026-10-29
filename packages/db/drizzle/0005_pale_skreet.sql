@@ -1,0 +1,1 @@
+ALTER TYPE "public"."share_kind" ADD VALUE 'album';

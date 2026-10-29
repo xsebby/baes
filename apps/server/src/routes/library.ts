@@ -12,7 +12,7 @@ import {
 } from '@baes/db';
 import type { Database } from '../db.js';
 import type { Config } from '../config.js';
-import { mediaPath } from '../library/signing.js';
+import { artPath, mediaPath } from '../library/signing.js';
 import { DEFAULT_TAG_LABELS, normalizeTag } from '../library/tags.js';
 import { z } from 'zod';
 
@@ -63,9 +63,7 @@ export const libraryRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, co
       streamUrl: mediaPath('stream', row.id, config.SERVER_SECRET, config.MEDIA_URL_TTL_SECONDS)
         .url,
       artUrl:
-        row.albumId && row.albumHasArt
-          ? mediaPath('art', row.albumId, config.SERVER_SECRET, config.MEDIA_URL_TTL_SECONDS).url
-          : null,
+        row.albumId && row.albumHasArt ? artPath(row.albumId, config.SERVER_SECRET).url : null,
     };
   }
 
@@ -155,9 +153,7 @@ export const libraryRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, co
         .filter((r) => r.trackCount > 0)
         .map((r) => ({
           ...r,
-          artUrl: r.hasArt
-            ? mediaPath('art', r.id, config.SERVER_SECRET, config.MEDIA_URL_TTL_SECONDS).url
-            : null,
+          artUrl: r.hasArt ? artPath(r.id, config.SERVER_SECRET).url : null,
         })),
     };
   });
@@ -213,9 +209,7 @@ export const libraryRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, co
         id: s.id,
         label: s.split.label ?? 'Original',
         trackCount: s.trackCount,
-        artUrl: s.hasArt
-          ? mediaPath('art', s.id, config.SERVER_SECRET, config.MEDIA_URL_TTL_SECONDS).url
-          : null,
+        artUrl: s.hasArt ? artPath(s.id, config.SERVER_SECRET).url : null,
       }))
       .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
@@ -248,9 +242,7 @@ export const libraryRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, co
       baseTitle: base,
       versionLabel: splitAlbumVersion(album.title).label,
       versions: versions.length > 1 ? versions : [],
-      artUrl: album.hasArt
-        ? mediaPath('art', album.id, config.SERVER_SECRET, config.MEDIA_URL_TTL_SECONDS).url
-        : null,
+      artUrl: album.hasArt ? artPath(album.id, config.SERVER_SECRET).url : null,
       tracks: albumTracks.map(withMediaUrls),
     };
   });

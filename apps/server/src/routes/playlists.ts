@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { albums, artists, externalTracks, likes, playlistItems, playlists, tracks } from '@baes/db';
 import type { Database } from '../db.js';
 import type { Config } from '../config.js';
-import { mediaPath } from '../library/signing.js';
+import { artPath, mediaPath } from '../library/signing.js';
 
 interface RouteOpts {
   db: Database;
@@ -48,9 +48,7 @@ export const playlistRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, c
       streamUrl: mediaPath('stream', row.id, config.SERVER_SECRET, config.MEDIA_URL_TTL_SECONDS)
         .url,
       artUrl:
-        row.albumId && row.albumHasArt
-          ? mediaPath('art', row.albumId, config.SERVER_SECRET, config.MEDIA_URL_TTL_SECONDS).url
-          : null,
+        row.albumId && row.albumHasArt ? artPath(row.albumId, config.SERVER_SECRET).url : null,
     };
   }
 
@@ -83,9 +81,7 @@ export const playlistRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, c
     return {
       playlists: rows.map(({ hasArt, ...r }) => ({
         ...r,
-        artUrl: hasArt
-          ? mediaPath('art', r.id, config.SERVER_SECRET, config.MEDIA_URL_TTL_SECONDS).url
-          : null,
+        artUrl: hasArt ? artPath(r.id, config.SERVER_SECRET).url : null,
       })),
     };
   });
@@ -194,9 +190,7 @@ export const playlistRoutes: FastifyPluginAsync<RouteOpts> = async (app, { db, c
       id: playlist.id,
       title: playlist.title,
       source: playlist.source,
-      artUrl: playlist.artPath
-        ? mediaPath('art', playlist.id, config.SERVER_SECRET, config.MEDIA_URL_TTL_SECONDS).url
-        : null,
+      artUrl: playlist.artPath ? artPath(playlist.id, config.SERVER_SECRET).url : null,
       items,
     };
   });

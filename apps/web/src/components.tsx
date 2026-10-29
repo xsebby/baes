@@ -102,7 +102,7 @@ export function TrackRow({
       }}
     >
       {track.artUrl ? (
-        <img className="art" src={client.mediaUrl(track.artUrl)} alt="" />
+        <img className="art" src={client.artUrl(track.artUrl, 160)} alt="" />
       ) : (
         <div className="art">♪</div>
       )}
@@ -264,7 +264,7 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
     <div className="playerbar">
       <div className="now">
         {current.artUrl ? (
-          <img src={client.mediaUrl(current.artUrl)} alt="" />
+          <img src={client.artUrl(current.artUrl, 160)} alt="" />
         ) : (
           <div className="art">♪</div>
         )}

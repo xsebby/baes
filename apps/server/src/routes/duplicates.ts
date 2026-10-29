@@ -5,7 +5,7 @@ import { albums, artists, duplicatePairs, tracks } from '@baes/db';
 import type { Database } from '../db.js';
 import type { Config } from '../config.js';
 import type { DuplicateFinder } from '../library/duplicates.js';
-import { mediaPath } from '../library/signing.js';
+import { artPath, mediaPath } from '../library/signing.js';
 
 interface RouteOpts {
   db: Database;
@@ -77,10 +77,7 @@ export const duplicateRoutes: FastifyPluginAsync<RouteOpts> = async (
         fileName: relPath.split('/').pop() ?? relPath,
         streamUrl: mediaPath('stream', r.id, config.SERVER_SECRET, config.MEDIA_URL_TTL_SECONDS)
           .url,
-        artUrl:
-          r.albumId && albumHasArt
-            ? mediaPath('art', r.albumId, config.SERVER_SECRET, config.MEDIA_URL_TTL_SECONDS).url
-            : null,
+        artUrl: r.albumId && albumHasArt ? artPath(r.albumId, config.SERVER_SECRET).url : null,
       });
     }
     return {

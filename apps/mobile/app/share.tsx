@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import type { ShareLink } from '@baes/core';
+import type { ShareKind, ShareLink } from '@baes/core';
 import { useAuth } from '../src/auth';
 import { shareLink } from '../src/share-link';
 
@@ -24,7 +24,7 @@ const EXPIRY: { label: string; days: number | null }[] = [
 /** Create and manage unlisted links for one playlist or track. */
 export default function ShareScreen() {
   const { kind, id, title } = useLocalSearchParams<{
-    kind: 'playlist' | 'track';
+    kind: ShareKind;
     id: string;
     title: string;
   }>();

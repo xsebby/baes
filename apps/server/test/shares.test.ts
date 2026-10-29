@@ -252,6 +252,52 @@ describe('share links', () => {
     expect(art.statusCode).toBe(404);
   });
 
+  it('shares an album: its tracks in order, a zip named after it, and a preview', async () => {
+    for (const id of trackIds.slice(0, 2)) {
+      await app.inject({
+        method: 'PATCH',
+        url: `/api/tracks/${id}`,
+        headers: auth(),
+        payload: { artistName: 'Share Artist', albumTitle: 'Shared Album' },
+      });
+    }
+    const album = (await app.inject({ method: 'GET', url: '/api/albums', headers: auth() }))
+      .json()
+      .albums.find((a: any) => a.title === 'Shared Album');
+    expect(album.trackCount).toBe(2);
+    const detail = (
+      await app.inject({ method: 'GET', url: `/api/albums/${album.id}`, headers: auth() })
+    ).json();
+
+    const created = await share({ kind: 'album', targetId: album.id });
+    expect(created.statusCode).toBe(201);
+    const { token, title } = created.json();
+    expect(title).toBe(album.title);
+
+    const body = (await open(token)).json();
+    expect(body.kind).toBe('album');
+    expect(body.title).toBe(album.title);
+    expect(body.artistName).toBe(album.artistName);
+    expect(body.items.map((i: any) => i.id)).toEqual(detail.tracks.map((t: any) => t.id));
+    // Only this album's tracks are reachable through the link.
+    const other = trackIds.find((id) => !body.items.some((i: any) => i.id === id))!;
+    expect(
+      (await app.inject({ method: 'GET', url: `/api/s/${token}/stream/${other}` })).statusCode,
+    ).toBe(404);
+
+    const zip = await app.inject({ method: 'GET', url: body.downloadAllUrl });
+    expect(zip.statusCode).toBe(200);
+    expect(zip.headers['content-disposition']).toContain(encodeURIComponent(album.title));
+
+    const page = (await app.inject({ method: 'GET', url: `/s/${token}` })).body;
+    expect(page).toContain('<meta property="og:type" content="music.album" />');
+    expect(page).toMatch(/og:description" content="Album · [^"]*songs?[^"]*"/);
+
+    expect(
+      (await share({ kind: 'album', targetId: '00000000-0000-0000-0000-000000000000' })).statusCode,
+    ).toBe(404);
+  });
+
   it('link previews: Open Graph tags for songs, playlists and dead links', async () => {
     const { token } = (await share({ kind: 'track', targetId: trackIds[0] })).json();
     const views = async () =>

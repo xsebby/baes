@@ -181,6 +181,8 @@ export function FullscreenPlayer({ onClose }: { onClose: () => void }) {
           <button onClick={next} title="Next" aria-label="Next">
             <NextIcon size={26} />
           </button>
+          {/* Balances shuffle so play sits in the middle. */}
+          <span className="fs-spacer" aria-hidden />
         </div>
       </div>
     </div>

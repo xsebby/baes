@@ -36,6 +36,13 @@
       "when": 1793082565490,
       "tag": "0004_curvy_ikaris",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793251306938,
+      "tag": "0005_pale_skreet",
+      "breakpoints": true
     }
   ]
 }

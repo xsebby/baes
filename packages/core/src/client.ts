@@ -16,6 +16,7 @@ import type {
   RecentPlay,
   DuplicateGroup,
   TagSummary,
+  ShareKind,
   ShareLink,
   SharedView,
   DuplicateStatus,
@@ -156,7 +157,7 @@ export class ApiClient {
   }
 
   createShare(opts: {
-    kind: 'playlist' | 'track';
+    kind: ShareKind;
     targetId: string;
     allowDownload?: boolean;
     /** null = never expires */
@@ -211,6 +212,11 @@ export class ApiClient {
 
   mediaUrl(relative: string): string {
     return `${this.baseUrl}${relative}`;
+  }
+
+  /** A cover at most `width` px wide (the server keeps resized copies). */
+  artUrl(relative: string, width?: 160 | 640): string {
+    return this.mediaUrl(width ? withWidth(relative, width) : relative);
   }
 
   // ---- Playlists & likes ----
@@ -400,4 +406,9 @@ export class ApiClient {
     }
     return (await res.json()) as { saved: string[]; rejected: string[] };
   }
+}
+
+/** Adds the resize parameter to an art URL (`?w=` or `&w=`). */
+export function withWidth(url: string, width: 160 | 640): string {
+  return `${url}${url.includes('?') ? '&' : '?'}w=${width}`;
 }

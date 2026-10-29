@@ -385,11 +385,11 @@ export const tagLabels = pgTable('tag_labels', {
 // Share links
 // ---------------------------------------------------------------------------
 
-export const shareKind = pgEnum('share_kind', ['playlist', 'track']);
+export const shareKind = pgEnum('share_kind', ['playlist', 'track', 'album']);
 
 /**
  * An unlisted link that lets anyone holding it stream (and optionally
- * download) one playlist or track without an account. The token is the
+ * download) one playlist, album or track without an account. The token is the
  * capability, so it's long and random; revoking or expiring it ends access.
  */
 export const shares = pgTable(

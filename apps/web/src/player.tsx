@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { Track } from '@baes/core';
+import { withWidth, type Track } from '@baes/core';
 import { useAuth } from './state';
 
 interface PlayerState {
@@ -136,7 +136,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             title: track.title,
             artist: track.artistName ?? 'Unknown artist',
             album: track.albumTitle ?? undefined,
-            artwork: track.artUrl ? [{ src: client.mediaUrl(track.artUrl) }] : [],
+            artwork: track.artUrl ? [{ src: client.artUrl(track.artUrl, 640) }] : [],
           });
         }
       })();
@@ -230,12 +230,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       );
     report();
     // Discord fetches the cover itself, so it needs a fresh absolute link
-    // (library art URLs expire an hour after the page loaded them).
+    // (library art URLs expire after a day or two).
     const albumId = current?.artUrl ? current.albumId : null;
     if (albumId) {
       const cached = artLinks.current.get(albumId);
       if (cached && cached.expiresAt > Date.now() + 60 * 60 * 1000) {
-        art = cached.url;
+        art = withWidth(cached.url, 640);
         report();
       } else {
         client
@@ -243,7 +243,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           .then(({ url, expiresAt }) => {
             artLinks.current.set(albumId, { url, expiresAt: Date.parse(expiresAt) });
             if (cancelled) return;
-            art = url;
+            art = withWidth(url, 640);
             report();
           })
           .catch(() => {});

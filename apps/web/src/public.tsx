@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ApiClient, type SharedItem, type SharedView } from '@baes/core';
+import { ApiClient, withWidth, type SharedItem, type SharedView } from '@baes/core';
 import { LegalLinks } from './legal';
 
 // ---- Icons ----
@@ -319,9 +319,17 @@ function totalLength(items: SharedItem[]): string {
   return min >= 60 ? `${Math.floor(min / 60)} h ${min % 60} min` : `${min} min`;
 }
 
-function Art({ src, className }: { src: string | null; className: string }) {
+function Art({
+  src,
+  className,
+  width,
+}: {
+  src: string | null;
+  className: string;
+  width: 160 | 640;
+}) {
   return src ? (
-    <img className={className} src={src} alt="" />
+    <img className={className} src={withWidth(src, width)} alt="" />
   ) : (
     <div className={`${className} art-empty`}>♪</div>
   );
@@ -427,7 +435,10 @@ export function SharePage({ token }: { token: string }) {
   return (
     <div className="share-page">
       {view.artUrl && (
-        <div className="share-backdrop" style={{ backgroundImage: `url("${view.artUrl}")` }} />
+        <div
+          className="share-backdrop"
+          style={{ backgroundImage: `url("${withWidth(view.artUrl, 640)}")` }}
+        />
       )}
 
       <header className="share-top">
@@ -436,7 +447,7 @@ export function SharePage({ token }: { token: string }) {
 
       {single && first ? (
         <section className="share-single">
-          <Art src={view.artUrl} className="single-art" />
+          <Art src={view.artUrl} className="single-art" width={640} />
           <span className="share-kind">Shared song</span>
           <h1>
             {first.tag && <span className="share-tag">{first.tag}</span>}
@@ -480,11 +491,14 @@ export function SharePage({ token }: { token: string }) {
       ) : (
         <>
           <section className="share-head">
-            <Art src={view.artUrl} className="share-art" />
+            <Art src={view.artUrl} className="share-art" width={640} />
             <div className="share-meta">
-              <span className="share-kind">Shared playlist</span>
+              <span className="share-kind">
+                {view.kind === 'album' ? 'Shared album' : 'Shared playlist'}
+              </span>
               <h1>{view.title}</h1>
               <span className="share-sub">
+                {view.artistName ? `${view.artistName} · ` : ''}
                 {view.items.length} {view.items.length === 1 ? 'song' : 'songs'} ·{' '}
                 {totalLength(view.items)}
                 {view.expiresAt
@@ -507,7 +521,7 @@ export function SharePage({ token }: { token: string }) {
             {view.items.map((t, i) => (
               <li key={t.id} className={i === current ? 'active' : ''} onClick={() => play(i)}>
                 <span className="share-idx">{i === current && playing ? <Bars /> : i + 1}</span>
-                <Art src={t.artUrl} className="row-art" />
+                <Art src={t.artUrl} className="row-art" width={160} />
                 <span className="share-title">
                   <span className="row-title">
                     {t.tag && <span className="share-tag">{t.tag}</span>}
@@ -540,7 +554,7 @@ export function SharePage({ token }: { token: string }) {
 
       {!single && now && (
         <div className="share-player">
-          <Art src={now.artUrl} className="player-art" />
+          <Art src={now.artUrl} className="player-art" width={160} />
           <div className="player-meta">
             <span className="player-title">{now.title}</span>
             <span className="player-artist">{now.artistName ?? 'Unknown artist'}</span>

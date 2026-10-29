@@ -2039,6 +2039,15 @@ body.electron.vibrancy.panels-tinted .sidebar {
 .legal-body strong {
   color: var(--text);
 }
+.legal-body p a {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(255, 255, 255, 0.3);
+}
+.legal-body p a:hover {
+  text-decoration-color: currentColor;
+}
 .legal-body code {
   font-size: 0.9em;
 }

@@ -2,7 +2,19 @@ import { useEffect, type ReactNode } from 'react';
 
 // ---- Terms and privacy (/terms, /privacy, no account) ----
 
-const UPDATED = 'October 28, 2026';
+const UPDATED = 'October 29, 2026';
+const CONTACT = 'contact@sebby.dev';
+
+const Email = () => <a href={`mailto:${CONTACT}`}>{CONTACT}</a>;
+
+const CONTACT_SECTION = {
+  h: 'Contact',
+  body: (
+    <p>
+      Questions, rights complaints or data requests: <Email />.
+    </p>
+  ),
+};
 
 type Doc = 'terms' | 'privacy';
 
@@ -82,7 +94,7 @@ const TERMS: { h: string; body: ReactNode }[] = [
     h: 'Rights complaints',
     body: (
       <p>
-        If you believe something on bæs infringes your rights, contact the owner with the share link
+        If you believe something on bæs infringes your rights, email <Email /> with the share link
         or track name and what you own. It will be reviewed and removed if the complaint is valid.
       </p>
     ),
@@ -106,6 +118,7 @@ const TERMS: { h: string; body: ReactNode }[] = [
       </p>
     ),
   },
+  CONTACT_SECTION,
 ];
 
 const PRIVACY: { h: string; body: ReactNode }[] = [
@@ -183,20 +196,16 @@ const PRIVACY: { h: string; body: ReactNode }[] = [
     h: 'Deleting your data',
     body: (
       <p>
-        Ask the owner and your account will be deleted, along with your sessions, playlists, likes
+        Email <Email /> and your account will be deleted, along with your sessions, playlists, likes
         and listening history. Backups containing it age out within 7 days.
       </p>
     ),
   },
   {
     h: 'Changes',
-    body: (
-      <p>
-        If this policy changes, the date at the top will change with it. Contact the owner with any
-        questions.
-      </p>
-    ),
+    body: <p>If this policy changes, the date at the top will change with it.</p>,
   },
+  CONTACT_SECTION,
 ];
 
 export function LegalPage({ doc }: { doc: Doc }) {

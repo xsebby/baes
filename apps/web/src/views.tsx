@@ -18,7 +18,7 @@ import type {
 import { formatDuration, useAuth } from './state';
 import { usePlayer } from './player';
 import { EditTrackModal, TrackRow } from './components';
-import { ShareModal } from './menu';
+import { ShareModal, SharedLinksSection } from './menu';
 
 export type View =
   | { type: 'library' }
@@ -1093,6 +1093,8 @@ export function AdminView({ navigate }: { navigate: (v: View) => void }) {
           {error}
         </div>
       )}
+
+      <SharedLinksSection />
 
       <IngestSection />
 

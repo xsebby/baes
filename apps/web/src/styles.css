@@ -410,6 +410,17 @@ input {
   color: var(--muted);
   font-size: 13px;
 }
+@media (max-width: 720px) {
+  .share-link-row {
+    flex-wrap: wrap;
+  }
+  .share-link-row .name {
+    flex-basis: 100%;
+  }
+  .share-link-row .count {
+    flex: 1;
+  }
+}
 
 /* ---- detail pages ---- */
 .detail-header {

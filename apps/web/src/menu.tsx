@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ShareKind, ShareLink } from '@baes/core';
 import { useAuth } from './state';
@@ -228,5 +228,87 @@ export function ShareModal({ target, onClose }: { target: ShareTarget; onClose: 
       </div>
     </div>,
     document.body,
+  );
+}
+
+// ---- Admin → Shared links ----
+
+const KIND_LABEL = { playlist: 'Playlist', album: 'Album', track: 'Song' } as const;
+
+/** Every active link, to copy again or revoke. */
+export function SharedLinksSection() {
+  const { client } = useAuth();
+  const [links, setLinks] = useState<ShareLink[] | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    client
+      .listShares()
+      .then((r) => setLinks(r.shares))
+      .catch(() => setLinks([]));
+  }, [client]);
+  useEffect(load, [load]);
+
+  async function copy(link: ShareLink) {
+    try {
+      await navigator.clipboard.writeText(new URL(link.url, window.location.origin).toString());
+      setCopied(link.id);
+      setTimeout(() => setCopied((c) => (c === link.id ? null : c)), 2000);
+    } catch {
+      // clipboard blocked; nothing useful to show
+    }
+  }
+
+  async function revoke(link: ShareLink) {
+    if (
+      !link.expired &&
+      !confirm(`Revoke the link to “${link.title}”? Anyone who has it will lose access.`)
+    ) {
+      return;
+    }
+    await client.revokeShare(link.id);
+    load();
+  }
+
+  return (
+    <>
+      <div className="section-title">Shared links</div>
+      {links?.length === 0 && (
+        <div className="muted small" style={{ padding: '4px 8px' }}>
+          No links yet. Share a song from its ⋯ menu, or an album or playlist from its page.
+        </div>
+      )}
+      {links?.map((l) => (
+        <div
+          key={l.id}
+          className="list-row share-link-row"
+          style={{ cursor: 'default', opacity: l.expired ? 0.5 : 1 }}
+        >
+          <div className="name">
+            <span className="muted">{KIND_LABEL[l.kind]} · </span>
+            {l.title}
+          </div>
+          <div className="count">
+            {l.expired
+              ? 'expired'
+              : l.expiresAt
+                ? `expires ${new Date(l.expiresAt).toLocaleDateString()}`
+                : 'never expires'}
+            {' · '}
+            {l.allowDownload ? 'downloads on' : 'no downloads'}
+            {' · '}
+            {l.views} {l.views === 1 ? 'view' : 'views'}
+          </div>
+          {!l.expired && (
+            <button className="iconbtn" onClick={() => void copy(l)}>
+              {copied === l.id ? 'Copied' : 'Copy link'}
+            </button>
+          )}
+          <button className="iconbtn" onClick={() => void revoke(l)}>
+            {l.expired ? 'Remove' : 'Revoke'}
+          </button>
+        </div>
+      ))}
+    </>
   );
 }
